@@ -46,6 +46,12 @@ export const gameSessions = pgTable("game_sessions", {
   score: integer("score").notNull(),
   difficulty: varchar("difficulty").notNull(), // easy, medium, hard
   duration: integer("duration").notNull(), // in seconds
+  // Detailed performance metrics for adaptive difficulty
+  accuracy: integer("accuracy"), // percentage 0-100
+  moves: integer("moves"), // for memory game
+  correctAnswers: integer("correct_answers"), // for logic/attention
+  totalAttempts: integer("total_attempts"), // total attempts made
+  difficultySettings: jsonb("difficulty_settings"), // stores the difficulty config used
   completedAt: timestamp("completed_at").defaultNow(),
 });
 

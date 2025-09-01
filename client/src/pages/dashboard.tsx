@@ -171,7 +171,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-background p-8">
         {activeGame === 'memory' && (
           <MemoryGame
-            onGameComplete={(score, moves, time) => handleGameComplete('memory', score, moves, time)}
+            onGameComplete={(score, moves, time, accuracy, difficultySettings) => handleGameComplete('memory', score, moves, time, accuracy, difficultySettings)}
             onClose={handleCloseGame}
           />
         )}

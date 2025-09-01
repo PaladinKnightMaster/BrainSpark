@@ -93,6 +93,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get adaptive difficulty settings for a game
+  app.get("/api/difficulty/:gameType", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const gameType = req.params.gameType;
+      const difficultySettings = await storage.getDifficultySettings(userId, gameType);
+      res.json(difficultySettings);
+    } catch (error) {
+      console.error("Error fetching difficulty settings:", error);
+      res.status(500).json({ message: "Failed to fetch difficulty settings" });
+    }
+  });
+
+  // Get user performance metrics for a game
+  app.get("/api/performance/:gameType", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const gameType = req.params.gameType;
+      const metrics = await storage.getUserPerformanceMetrics(userId, gameType);
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching performance metrics:", error);
+      res.status(500).json({ message: "Failed to fetch performance metrics" });
+    }
+  });
+
   // Training plan routes
   app.get('/api/training-plan', isAuthenticated, async (req: any, res) => {
     try {
