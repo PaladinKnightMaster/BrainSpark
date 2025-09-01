@@ -11,6 +11,7 @@ import { ProgressChart } from "@/components/progress-chart";
 import { MemoryGame } from "@/components/games/memory-game";
 import { LogicPuzzle } from "@/components/games/logic-puzzle";
 import { AttentionGame } from "@/components/games/attention-game";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
@@ -204,6 +205,7 @@ export default function Dashboard() {
               <span className="text-muted-foreground" data-testid="text-welcome">
                 Welcome, {(user as any)?.firstName || (user as any)?.email || 'User'}!
               </span>
+              <ThemeToggle />
               <Button
                 variant="ghost"
                 onClick={handleLogout}

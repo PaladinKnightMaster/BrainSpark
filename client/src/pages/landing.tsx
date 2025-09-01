@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GradientButton } from "@/components/ui/gradient-button";
 import { FeatureCard } from "@/components/feature-card";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 export default function Landing() {
@@ -88,6 +89,7 @@ export default function Landing() {
               <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
             </div>
             <div className="flex items-center space-x-4">
+              <ThemeToggle />
               <Button
                 variant="ghost"
                 onClick={handleSignIn}
