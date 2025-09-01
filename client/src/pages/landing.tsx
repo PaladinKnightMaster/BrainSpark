@@ -1,4 +1,6 @@
 import { useState } from "react";
+import mobileAppMockup from "@/assets/Mobile_app_interface_mockup_eddc62bd.png";
+import brainVisualization from "@/assets/Premium_brain_visualization_hero_c991f018.png";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,7 +152,7 @@ export default function Landing() {
             </div>
             <div className="relative animate-fade-in">
               <img
-                src="/attached_assets/generated_images/Mobile_app_interface_mockup_eddc62bd.png"
+                src={mobileAppMockup}
                 alt="Premium mobile app interface showing brain training games"
                 className="rounded-3xl premium-shadow w-full max-w-md mx-auto"
               />
@@ -220,7 +222,7 @@ export default function Landing() {
 
           <div className="relative rounded-3xl overflow-hidden premium-shadow">
             <img
-              src="/attached_assets/generated_images/Premium_brain_visualization_hero_c991f018.png"
+              src={brainVisualization}
               alt="Futuristic brain visualization with neural networks representing cognitive science"
               className="w-full h-96 object-cover"
             />

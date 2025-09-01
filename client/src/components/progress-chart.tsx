@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import analyticsBackground from "@/assets/Data_analytics_visualization_background_021ca1fb.png";
 
 interface ProgressChartProps {
   data: {
@@ -17,7 +18,7 @@ export function ProgressChart({ data }: ProgressChartProps) {
       <CardContent>
         {/* Premium analytics visualization */}
         <img
-          src="/attached_assets/generated_images/Data_analytics_visualization_background_021ca1fb.png"
+          src={analyticsBackground}
           alt="Professional analytics dashboard showing brain training progress"
           className="w-full h-32 object-cover rounded-lg mb-4"
         />
