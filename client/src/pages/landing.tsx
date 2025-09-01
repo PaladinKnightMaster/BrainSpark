@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GradientButton } from "@/components/ui/gradient-button";
 import { FeatureCard } from "@/components/feature-card";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 export default function Landing() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -448,17 +448,17 @@ export default function Landing() {
       {/* Authentication Modal */}
       <Dialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
         <DialogContent className="w-full max-w-md premium-shadow animate-scale-in">
+          <DialogTitle className="text-center text-2xl font-bold text-card-foreground">
+            {authMode === 'login' ? 'Welcome Back' : 'Start Your Journey'}
+          </DialogTitle>
+          <DialogDescription className="text-center text-muted-foreground">
+            {authMode === 'login' 
+              ? 'Sign in to continue your brain training journey'
+              : 'Create your account and begin training'
+            }
+          </DialogDescription>
           <div className="text-center mb-8">
             <i className="fas fa-brain text-3xl text-primary mb-4"></i>
-            <h2 className="text-2xl font-bold text-card-foreground">
-              {authMode === 'login' ? 'Welcome Back' : 'Start Your Journey'}
-            </h2>
-            <p className="text-muted-foreground">
-              {authMode === 'login' 
-                ? 'Sign in to continue your brain training journey'
-                : 'Create your account and begin training'
-              }
-            </p>
           </div>
           
           <div className="space-y-6">
