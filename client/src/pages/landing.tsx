@@ -236,6 +236,192 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Science Section */}
+      <section id="science" className="py-24 bg-muted/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">The Science Behind BrainBoost</h2>
+            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+              Our brain training games are built on decades of cognitive neuroscience research and proven training methodologies
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <Card className="p-8 premium-shadow">
+              <CardContent className="p-0 text-center">
+                <i className="fas fa-brain text-4xl text-primary mb-6"></i>
+                <h3 className="text-xl font-semibold mb-4">Neuroplasticity</h3>
+                <p className="text-muted-foreground">
+                  Our games leverage the brain's ability to form new neural connections throughout life, enhancing cognitive abilities through targeted practice.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card className="p-8 premium-shadow">
+              <CardContent className="p-0 text-center">
+                <i className="fas fa-chart-line text-4xl text-accent mb-6"></i>
+                <h3 className="text-xl font-semibold mb-4">Adaptive Training</h3>
+                <p className="text-muted-foreground">
+                  Research shows that training at optimal difficulty levels maximizes cognitive gains. Our algorithms adjust in real-time to keep you challenged.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card className="p-8 premium-shadow">
+              <CardContent className="p-0 text-center">
+                <i className="fas fa-medal text-4xl text-chart-3 mb-6"></i>
+                <h3 className="text-xl font-semibold mb-4">Validated Results</h3>
+                <p className="text-muted-foreground">
+                  Clinical studies demonstrate measurable improvements in working memory, attention, and processing speed after consistent training.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="mt-16 text-center">
+            <p className="text-sm text-muted-foreground">
+              Research partnerships with Stanford University, MIT, and the National Institute of Health
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Choose Your Training Plan</h2>
+            <p className="text-xl text-muted-foreground">
+              Start free and upgrade when you're ready for advanced features
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {/* Free Plan */}
+            <Card className="p-8 premium-shadow">
+              <CardContent className="p-0">
+                <div className="text-center mb-8">
+                  <h3 className="text-2xl font-bold mb-2">Free</h3>
+                  <div className="text-4xl font-bold text-muted-foreground mb-4">$0</div>
+                  <p className="text-muted-foreground">Perfect for getting started</p>
+                </div>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>3 basic games</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Basic progress tracking</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Daily challenges</span>
+                  </li>
+                </ul>
+                <Button
+                  onClick={handleGetStarted}
+                  variant="outline"
+                  className="w-full py-3"
+                  data-testid="button-select-free"
+                >
+                  Get Started Free
+                </Button>
+              </CardContent>
+            </Card>
+            
+            {/* Premium Plan */}
+            <Card className="p-8 premium-shadow bg-gradient-to-br from-primary/5 to-accent/5 border-2 border-primary/20 relative">
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <span className="bg-primary text-white px-4 py-1 rounded-full text-sm font-medium">
+                  Most Popular
+                </span>
+              </div>
+              <CardContent className="p-0">
+                <div className="text-center mb-8">
+                  <h3 className="text-2xl font-bold mb-2">Premium</h3>
+                  <div className="text-4xl font-bold text-primary mb-4">$9.99<span className="text-lg text-muted-foreground">/mo</span></div>
+                  <p className="text-muted-foreground">Complete brain training experience</p>
+                </div>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>All 15+ games</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Advanced analytics</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Personalized training plans</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Progress reports</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>No ads</span>
+                  </li>
+                </ul>
+                <GradientButton
+                  onClick={handleGetStarted}
+                  className="w-full py-3"
+                  data-testid="button-select-premium"
+                >
+                  Start Premium Trial
+                </GradientButton>
+              </CardContent>
+            </Card>
+            
+            {/* Annual Plan */}
+            <Card className="p-8 premium-shadow">
+              <CardContent className="p-0">
+                <div className="text-center mb-8">
+                  <h3 className="text-2xl font-bold mb-2">Annual</h3>
+                  <div className="text-4xl font-bold text-accent mb-1">$79.99<span className="text-lg text-muted-foreground">/year</span></div>
+                  <div className="text-sm text-primary font-medium mb-4">Save 33%</div>
+                  <p className="text-muted-foreground">Best value for committed learners</p>
+                </div>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Everything in Premium</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Priority support</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Early access to new games</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <i className="fas fa-check text-primary"></i>
+                    <span>Annual progress report</span>
+                  </li>
+                </ul>
+                <Button
+                  onClick={handleGetStarted}
+                  variant="outline"
+                  className="w-full py-3"
+                  data-testid="button-select-annual"
+                >
+                  Choose Annual
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="mt-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              30-day money-back guarantee • Cancel anytime • Secure payment via Stripe
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="py-24 bg-gradient-to-br from-primary to-accent">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
