@@ -8,6 +8,7 @@ import {
   integer,
   text,
   boolean,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -58,7 +59,9 @@ export const userProgress = pgTable("user_progress", {
   streak: integer("streak").default(0),
   lastPlayedAt: timestamp("last_played_at"),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  userGameTypeUnique: unique("user_game_type_unique").on(table.userId, table.gameType),
+}));
 
 // Training plans table
 export const trainingPlans = pgTable("training_plans", {
