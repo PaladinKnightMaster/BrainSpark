@@ -29,6 +29,8 @@ export default function Landing() {
   };
 
   const handleLogoClick = () => {
+    // Update URL to remove any hash fragments and go back to root
+    window.history.pushState({}, '', '/');
     // Scroll to top of page
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
