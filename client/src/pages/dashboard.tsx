@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -8,14 +8,20 @@ import { Button } from "@/components/ui/button";
 import { GradientButton } from "@/components/ui/gradient-button";
 import { GameCard } from "@/components/game-card";
 import { ProgressChart } from "@/components/progress-chart";
+import { MemoryGame } from "@/components/games/memory-game";
+import { LogicPuzzle } from "@/components/games/logic-puzzle";
+import { AttentionGame } from "@/components/games/attention-game";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+
+type ActiveGame = 'memory' | 'logic' | 'attention' | null;
 
 export default function Dashboard() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const [activeGame, setActiveGame] = useState<ActiveGame>(null);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -75,9 +81,26 @@ export default function Dashboard() {
   });
 
   const handlePlayGame = (gameType: string, difficulty: string, duration: number) => {
-    // Simulate game play
+    // Check if it's one of our mini-games
+    if (gameType === 'memory' || gameType === 'logic' || gameType === 'attention') {
+      setActiveGame(gameType);
+      return;
+    }
+    
+    // Simulate game play for other games
     const score = Math.floor(Math.random() * 1000) + 500;
     gameSessionMutation.mutate({ gameType, score, difficulty, duration });
+  };
+
+  const handleGameComplete = (gameType: string, score: number, ...additionalData: any[]) => {
+    const difficulty = 'medium';
+    const duration = Math.floor(Math.random() * 300) + 120; // 2-7 minutes
+    gameSessionMutation.mutate({ gameType, score, difficulty, duration });
+    setActiveGame(null);
+  };
+
+  const handleCloseGame = () => {
+    setActiveGame(null);
   };
 
   const handleLogout = () => {
@@ -109,24 +132,24 @@ export default function Dashboard() {
   const todaysGames = [
     {
       icon: "fa-puzzle-piece",
-      title: "Memory Matrix",
-      description: "Test your visual memory with pattern recognition challenges",
+      title: "Memory Card Game",
+      description: "Flip cards to find matching pairs and improve your visual memory",
       duration: "5 min",
       difficulty: "medium" as const,
       gameType: "memory",
     },
     {
       icon: "fa-brain",
-      title: "Logic Chains",
-      description: "Solve sequential logic puzzles to enhance reasoning skills",
+      title: "Logic Puzzle",
+      description: "Complete sequences and patterns to enhance reasoning skills",
       duration: "3 min",
       difficulty: "easy" as const,
       gameType: "logic",
     },
     {
-      icon: "fa-eye",
-      title: "Focus Flow",
-      description: "Improve sustained attention with concentration exercises",
+      icon: "fa-crosshairs",
+      title: "Attention Game",
+      description: "React quickly to target objects to improve focus and attention",
       duration: "4 min",
       difficulty: "hard" as const,
       gameType: "attention",
@@ -140,6 +163,32 @@ export default function Dashboard() {
       gameType: "speed",
     },
   ];
+
+  // Render active game if one is selected
+  if (activeGame) {
+    return (
+      <div className="min-h-screen bg-background p-8">
+        {activeGame === 'memory' && (
+          <MemoryGame
+            onGameComplete={(score, moves, time) => handleGameComplete('memory', score, moves, time)}
+            onClose={handleCloseGame}
+          />
+        )}
+        {activeGame === 'logic' && (
+          <LogicPuzzle
+            onGameComplete={(score, correct, total) => handleGameComplete('logic', score, correct, total)}
+            onClose={handleCloseGame}
+          />
+        )}
+        {activeGame === 'attention' && (
+          <AttentionGame
+            onGameComplete={(score, accuracy, level) => handleGameComplete('attention', score, accuracy, level)}
+            onClose={handleCloseGame}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
