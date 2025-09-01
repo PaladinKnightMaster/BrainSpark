@@ -28,6 +28,11 @@ export default function Landing() {
     window.location.href = '/api/login';
   };
 
+  const handleLogoClick = () => {
+    // Scroll to top of page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const features = [
     {
       icon: <i className="fas fa-gamepad text-2xl text-primary"></i>,
@@ -67,10 +72,14 @@ export default function Landing() {
       <nav className="sticky top-0 z-50 glass-effect border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
+            <button 
+              onClick={handleLogoClick}
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity cursor-pointer"
+              data-testid="button-logo"
+            >
               <i className="fas fa-brain text-2xl text-primary"></i>
               <span className="text-xl font-bold text-foreground">BrainBoost</span>
-            </div>
+            </button>
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
               <a href="#science" className="text-muted-foreground hover:text-foreground transition-colors">Science</a>
