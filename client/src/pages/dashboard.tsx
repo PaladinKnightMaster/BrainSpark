@@ -94,9 +94,49 @@ export default function Dashboard() {
   };
 
   const handleGameComplete = (gameType: string, score: number, ...additionalData: any[]) => {
-    const difficulty = 'medium';
-    const duration = Math.floor(Math.random() * 300) + 120; // 2-7 minutes
-    gameSessionMutation.mutate({ gameType, score, difficulty, duration });
+    // Parse additional data based on game type
+    let sessionData: any = {
+      gameType,
+      score,
+      difficulty: 'adaptive'
+    };
+
+    if (gameType === 'memory') {
+      // additionalData: [moves, time, accuracy, difficultySettings]
+      const [moves, time, accuracy, difficultySettings] = additionalData;
+      sessionData = {
+        ...sessionData,
+        duration: time,
+        moves: moves,
+        accuracy: accuracy ? Math.round(accuracy) : undefined,
+        totalAttempts: moves,
+        difficultySettings: difficultySettings
+      };
+    } else if (gameType === 'logic') {
+      // additionalData: [correct, total]
+      const [correct, total] = additionalData;
+      sessionData = {
+        ...sessionData,
+        duration: 180, // Logic puzzles take ~3 min
+        correctAnswers: correct,
+        totalAttempts: total,
+        accuracy: total > 0 ? Math.round((correct / total) * 100) : 0
+      };
+    } else if (gameType === 'attention') {
+      // additionalData: [accuracy, level]
+      const [accuracy, level] = additionalData;
+      sessionData = {
+        ...sessionData,
+        duration: 60, // Attention game is 60 seconds
+        accuracy: accuracy ? Math.round(accuracy) : undefined,
+        correctAnswers: level
+      };
+    } else {
+      // Fallback for other games
+      sessionData.duration = Math.floor(Math.random() * 300) + 120;
+    }
+
+    gameSessionMutation.mutate(sessionData);
     setActiveGame(null);
   };
 

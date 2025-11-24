@@ -44,7 +44,7 @@ export const gameSessions = pgTable("game_sessions", {
   userId: varchar("user_id").notNull().references(() => users.id),
   gameType: varchar("game_type").notNull(), // memory, logic, attention, speed
   score: integer("score").notNull(),
-  difficulty: varchar("difficulty").notNull(), // easy, medium, hard
+  difficulty: varchar("difficulty").default('adaptive'), // easy, medium, hard, adaptive
   duration: integer("duration").notNull(), // in seconds
   // Detailed performance metrics for adaptive difficulty
   accuracy: integer("accuracy"), // percentage 0-100

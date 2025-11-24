@@ -40,13 +40,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessionData = insertGameSessionSchema.parse({ ...req.body, userId });
       const session = await storage.createGameSession(sessionData);
       
+      // Calculate level from performance metrics instead of difficulty label
+      let currentLevel = 1;
+      if (sessionData.accuracy) {
+        // Adaptive level based on accuracy
+        if (sessionData.accuracy >= 90) currentLevel = 5;
+        else if (sessionData.accuracy >= 80) currentLevel = 4;
+        else if (sessionData.accuracy >= 70) currentLevel = 3;
+        else if (sessionData.accuracy >= 60) currentLevel = 2;
+        else currentLevel = 1;
+      } else {
+        // Fallback to difficulty label if no accuracy
+        currentLevel = sessionData.difficulty === 'easy' ? 1 : sessionData.difficulty === 'medium' ? 2 : 3;
+      }
+      
       // Update user progress
       const progressUpdate = {
         userId,
         gameType: sessionData.gameType,
-        currentLevel: sessionData.difficulty === 'easy' ? 1 : sessionData.difficulty === 'medium' ? 2 : 3,
+        currentLevel,
         totalScore: sessionData.score,
-        streak: 1, // TODO: Calculate actual streak
+        streak: sessionData.accuracy && sessionData.accuracy >= 70 ? 1 : 0,
         lastPlayedAt: new Date(),
       };
       
