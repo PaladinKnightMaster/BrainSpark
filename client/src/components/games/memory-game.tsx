@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GradientButton } from "@/components/ui/gradient-button";
-import { apiRequest } from "@/lib/queryClient";
-import type { DifficultySettings } from "@shared/difficulty-calculator";
 
 interface MemoryCard {
   id: number;
@@ -27,41 +26,19 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
   const [isGameComplete, setIsGameComplete] = useState(false);
   const [startTime] = useState(Date.now());
   const [gameTime, setGameTime] = useState(0);
-  const [difficultySettings, setDifficultySettings] = useState<DifficultySettings | null>(null);
   const [showPreview, setShowPreview] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch adaptive difficulty settings from API
+  const { data: difficultySettings, isLoading } = useQuery<{
+    cardPairs: number;
+    previewTime: number;
+  }>({
+    queryKey: ['/api/difficulty/memory'],
+  });
 
   // Adaptive difficulty settings
-  const cardPairs = difficultySettings?.memory.cardPairs || 4;
-  const previewTime = difficultySettings?.memory.previewTime || 3;
-
-  // Fetch difficulty settings
-  useEffect(() => {
-    const fetchDifficulty = async () => {
-      try {
-        const response = await fetch('/api/difficulty/memory', {
-          credentials: 'include'
-        });
-        if (response.ok) {
-          const settings: DifficultySettings = await response.json();
-          setDifficultySettings(settings);
-        } else {
-          throw new Error('Failed to fetch difficulty settings');
-        }
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Failed to fetch difficulty settings:', error);
-        // Use default settings if fetch fails
-        setDifficultySettings({
-          memory: { cardPairs: 4, previewTime: 3 },
-          logic: { sequenceLength: 4, complexityLevel: 1, totalRounds: 8 },
-          attention: { spawnRate: 1.0, targetRatio: 0.3, gameSpeed: 1.0, duration: 60 }
-        });
-        setIsLoading(false);
-      }
-    };
-    fetchDifficulty();
-  }, []);
+  const cardPairs = difficultySettings?.cardPairs || 4;
+  const previewTime = difficultySettings?.previewTime || 3;
 
   // Initialize cards
   const initializeGame = useCallback(() => {
@@ -94,10 +71,10 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
   }, [cardPairs, previewTime, difficultySettings]);
 
   useEffect(() => {
-    if (difficultySettings) {
+    if (!isLoading && difficultySettings) {
       initializeGame();
     }
-  }, [initializeGame, difficultySettings]);
+  }, [initializeGame, difficultySettings, isLoading]);
 
   // Update game time
   useEffect(() => {
@@ -162,7 +139,7 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
       const finalTime = Math.floor((Date.now() - startTime) / 1000);
       const score = Math.max(1000 - (moves * 10) - (finalTime * 2), 100);
       const accuracy = matchedPairs / Math.max(moves, 1) * 100; // Efficiency percentage
-      onGameComplete(score, moves, finalTime, accuracy, difficultySettings?.memory);
+      onGameComplete(score, moves, finalTime, accuracy, difficultySettings || { cardPairs, previewTime });
     }
   }, [matchedPairs, cardPairs, moves, startTime, onGameComplete, difficultySettings]);
 

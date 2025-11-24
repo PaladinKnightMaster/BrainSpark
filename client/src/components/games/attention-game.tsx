@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GradientButton } from "@/components/ui/gradient-button";
@@ -13,7 +14,7 @@ interface GameObject {
 }
 
 interface AttentionGameProps {
-  onGameComplete: (score: number, accuracy: number, level: number) => void;
+  onGameComplete: (score: number, accuracy: number, level: number, difficultySettings?: any) => void;
   onClose: () => void;
 }
 
@@ -32,14 +33,30 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
   const [timeLeft, setTimeLeft] = useState(60);
   const [lastSpawnTime, setLastSpawnTime] = useState(0);
 
-  const spawnInterval = Math.max(500 - (level * 50), 200); // Faster spawning at higher levels
-  const objectSpeed = Math.min(1 + (level * 0.3), 4); // Faster movement at higher levels
+  // Fetch adaptive difficulty settings
+  const { data: difficultyData } = useQuery<{
+    spawnRate: number;
+    targetRatio: number;
+    gameSpeed: number;
+    duration: number;
+  }>({
+    queryKey: ['/api/difficulty/attention'],
+  });
+
+  const gameDuration = difficultyData?.duration || 60;
+  // Convert spawnRate (objects per second) to spawn interval (milliseconds)
+  const baseSpawnInterval = difficultyData?.spawnRate ? Math.max(200, 1000 / difficultyData.spawnRate) : 500;
+  const targetFrequency = difficultyData?.targetRatio || 0.3;
+  const baseGameSpeed = difficultyData?.gameSpeed || 1.0;
+
+  const spawnInterval = Math.max(baseSpawnInterval - (level * 50), 200);
+  const objectSpeed = baseGameSpeed * (1 + (level * 0.3)); // Apply adaptive game speed
 
   const spawnObject = useCallback(() => {
     const now = Date.now();
     if (now - lastSpawnTime < spawnInterval) return;
 
-    const isTarget = Math.random() < 0.3; // 30% chance for target object
+    const isTarget = Math.random() < targetFrequency;
     const objectType = isTarget ? TARGET_OBJECT : OBJECTS[Math.floor(Math.random() * OBJECTS.length)];
     
     const newObject: GameObject = {
@@ -53,7 +70,7 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
 
     setObjects(prev => [...prev, newObject]);
     setLastSpawnTime(now);
-  }, [level, spawnInterval, objectSpeed, lastSpawnTime]);
+  }, [level, spawnInterval, objectSpeed, lastSpawnTime, targetFrequency]);
 
   // Game timer
   useEffect(() => {
@@ -120,7 +137,7 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
     setIsGameActive(false);
     setGameComplete(true);
     const accuracy = totalClicks > 0 ? Math.round((correctClicks / totalClicks) * 100) : 0;
-    onGameComplete(score, accuracy, level);
+    onGameComplete(score, accuracy, level, difficultyData);
   };
 
   const startGame = () => {
@@ -131,13 +148,27 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
     setLives(3);
     setTotalClicks(0);
     setCorrectClicks(0);
-    setTimeLeft(60);
+    setTimeLeft(gameDuration);
     setObjects([]);
   };
 
   const restartGame = () => {
     startGame();
   };
+
+  // Show loading state while fetching difficulty settings
+  if (!difficultyData) {
+    return (
+      <Card className="w-full max-w-4xl mx-auto premium-shadow">
+        <CardContent className="flex items-center justify-center p-12">
+          <div className="text-center space-y-4">
+            <div className="text-4xl">🎯</div>
+            <p className="text-muted-foreground">Loading adaptive difficulty...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-4xl mx-auto premium-shadow">

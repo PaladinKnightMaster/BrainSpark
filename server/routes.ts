@@ -112,8 +112,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const gameType = req.params.gameType;
-      const difficultySettings = await storage.getDifficultySettings(userId, gameType);
-      res.json(difficultySettings);
+      const allSettings = await storage.getDifficultySettings(userId, gameType);
+      
+      // Extract only the specific game's settings
+      let gameSettings;
+      if (gameType === 'memory') {
+        gameSettings = allSettings.memory;
+      } else if (gameType === 'logic') {
+        gameSettings = allSettings.logic;
+      } else if (gameType === 'attention') {
+        gameSettings = allSettings.attention;
+      } else {
+        return res.status(400).json({ message: "Invalid game type" });
+      }
+      
+      res.json(gameSettings);
     } catch (error) {
       console.error("Error fetching difficulty settings:", error);
       res.status(500).json({ message: "Failed to fetch difficulty settings" });

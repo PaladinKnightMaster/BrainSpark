@@ -113,23 +113,25 @@ export default function Dashboard() {
         difficultySettings: difficultySettings
       };
     } else if (gameType === 'logic') {
-      // additionalData: [correct, total]
-      const [correct, total] = additionalData;
+      // additionalData: [correct, total, difficultySettings]
+      const [correct, total, difficultySettings] = additionalData;
       sessionData = {
         ...sessionData,
         duration: 180, // Logic puzzles take ~3 min
         correctAnswers: correct,
         totalAttempts: total,
-        accuracy: total > 0 ? Math.round((correct / total) * 100) : 0
+        accuracy: total > 0 ? Math.round((correct / total) * 100) : 0,
+        difficultySettings: difficultySettings
       };
     } else if (gameType === 'attention') {
-      // additionalData: [accuracy, level]
-      const [accuracy, level] = additionalData;
+      // additionalData: [accuracy, level, difficultySettings]
+      const [accuracy, level, difficultySettings] = additionalData;
       sessionData = {
         ...sessionData,
-        duration: 60, // Attention game is 60 seconds
+        duration: difficultySettings?.duration || 60,
         accuracy: accuracy ? Math.round(accuracy) : undefined,
-        correctAnswers: level
+        correctAnswers: level,
+        difficultySettings: difficultySettings
       };
     } else {
       // Fallback for other games
@@ -217,13 +219,13 @@ export default function Dashboard() {
         )}
         {activeGame === 'logic' && (
           <LogicPuzzle
-            onGameComplete={(score, correct, total) => handleGameComplete('logic', score, correct, total)}
+            onGameComplete={(score, correct, total, difficultySettings) => handleGameComplete('logic', score, correct, total, difficultySettings)}
             onClose={handleCloseGame}
           />
         )}
         {activeGame === 'attention' && (
           <AttentionGame
-            onGameComplete={(score, accuracy, level) => handleGameComplete('attention', score, accuracy, level)}
+            onGameComplete={(score, accuracy, level, difficultySettings) => handleGameComplete('attention', score, accuracy, level, difficultySettings)}
             onClose={handleCloseGame}
           />
         )}
