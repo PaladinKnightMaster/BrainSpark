@@ -104,10 +104,10 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
       setMoves(prev => prev + 1);
       
       const [firstId, secondId] = newFlippedCards;
-      const firstCard = cards[firstId];
-      const secondCard = cards[secondId];
+      const firstCard = cards.find(c => c.id === firstId);
+      const secondCard = cards.find(c => c.id === secondId);
 
-      if (firstCard.value === secondCard.value) {
+      if (firstCard && secondCard && firstCard.value === secondCard.value) {
         // Match found
         setTimeout(() => {
           setCards(prev => prev.map(card =>
