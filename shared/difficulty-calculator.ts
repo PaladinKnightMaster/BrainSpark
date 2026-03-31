@@ -21,6 +21,12 @@ export interface DifficultySettings {
     gameSpeed: number; // movement speed multiplier
     duration: number; // game duration in seconds
   };
+  speed: {
+    timePerQuestion: number; // seconds per question
+    maxNumber: number; // max operand value
+    operationTypes: string[]; // 'add', 'subtract', 'multiply', 'divide'
+    totalQuestions: number; // total questions per round
+  };
 }
 
 export class DifficultyCalculator {
@@ -28,11 +34,9 @@ export class DifficultyCalculator {
   static calculateMemoryDifficulty(metrics: PerformanceMetrics): DifficultySettings['memory'] {
     const { accuracy, avgTime, streak } = metrics;
     
-    // Base difficulty
     let cardPairs = 4;
     let previewTime = 3;
     
-    // Adjust based on accuracy (0.7+ is good performance)
     if (accuracy >= 0.9 && streak >= 3) {
       cardPairs = Math.min(12, cardPairs + 3);
       previewTime = Math.max(1, previewTime - 1);
@@ -42,12 +46,10 @@ export class DifficultyCalculator {
     } else if (accuracy >= 0.7) {
       cardPairs = Math.min(8, cardPairs + 1);
     } else if (accuracy < 0.5) {
-      // Make it easier
       cardPairs = Math.max(3, cardPairs - 1);
       previewTime = Math.min(5, previewTime + 1);
     }
     
-    // Adjust based on speed (faster completion = higher difficulty)
     if (avgTime < 30 && accuracy >= 0.7) {
       cardPairs = Math.min(12, cardPairs + 1);
     } else if (avgTime > 90) {
@@ -62,12 +64,10 @@ export class DifficultyCalculator {
   static calculateLogicDifficulty(metrics: PerformanceMetrics): DifficultySettings['logic'] {
     const { accuracy, streak, recentGames } = metrics;
     
-    // Base difficulty
     let sequenceLength = 4;
     let complexityLevel = 1;
     let totalRounds = 10;
     
-    // Adjust based on accuracy and streak
     if (accuracy >= 0.9 && streak >= 5) {
       sequenceLength = Math.min(8, sequenceLength + 2);
       complexityLevel = Math.min(5, complexityLevel + 2);
@@ -79,13 +79,11 @@ export class DifficultyCalculator {
     } else if (accuracy >= 0.7) {
       complexityLevel = Math.min(3, complexityLevel + 1);
     } else if (accuracy < 0.5) {
-      // Make it easier
       sequenceLength = Math.max(3, sequenceLength - 1);
       complexityLevel = Math.max(1, complexityLevel - 1);
       totalRounds = Math.max(5, totalRounds - 2);
     }
     
-    // Progressive difficulty for experienced players
     if (recentGames >= 10 && accuracy >= 0.8) {
       complexityLevel = Math.min(5, complexityLevel + 1);
     }
@@ -97,13 +95,11 @@ export class DifficultyCalculator {
   static calculateAttentionDifficulty(metrics: PerformanceMetrics): DifficultySettings['attention'] {
     const { accuracy, avgTime, streak } = metrics;
     
-    // Base difficulty
-    let spawnRate = 1.0; // objects per second
-    let targetRatio = 0.3; // 30% targets
+    let spawnRate = 1.0;
+    let targetRatio = 0.3;
     let gameSpeed = 1.0;
     let duration = 60;
     
-    // Adjust based on accuracy
     if (accuracy >= 0.9 && streak >= 5) {
       spawnRate = Math.min(3.0, spawnRate + 0.8);
       targetRatio = Math.max(0.2, targetRatio - 0.05);
@@ -116,7 +112,6 @@ export class DifficultyCalculator {
       spawnRate = Math.min(2.0, spawnRate + 0.3);
       gameSpeed = Math.min(1.4, gameSpeed + 0.2);
     } else if (accuracy < 0.5) {
-      // Make it easier
       spawnRate = Math.max(0.5, spawnRate - 0.3);
       targetRatio = Math.min(0.4, targetRatio + 0.05);
       gameSpeed = Math.max(0.7, gameSpeed - 0.2);
@@ -124,13 +119,51 @@ export class DifficultyCalculator {
     
     return { spawnRate, targetRatio, gameSpeed, duration };
   }
+
+  // Calculate Speed Math difficulty
+  static calculateSpeedDifficulty(metrics: PerformanceMetrics): DifficultySettings['speed'] {
+    const { accuracy, avgTime, streak, recentGames } = metrics;
+
+    let timePerQuestion = 8;
+    let maxNumber = 10;
+    let operationTypes = ['add'];
+    let totalQuestions = 10;
+
+    if (accuracy >= 0.9 && streak >= 5) {
+      timePerQuestion = Math.max(3, timePerQuestion - 3);
+      maxNumber = Math.min(100, maxNumber + 40);
+      operationTypes = ['add', 'subtract', 'multiply', 'divide'];
+      totalQuestions = Math.min(20, totalQuestions + 5);
+    } else if (accuracy >= 0.8 && streak >= 3) {
+      timePerQuestion = Math.max(4, timePerQuestion - 2);
+      maxNumber = Math.min(50, maxNumber + 20);
+      operationTypes = ['add', 'subtract', 'multiply'];
+      totalQuestions = Math.min(15, totalQuestions + 3);
+    } else if (accuracy >= 0.7) {
+      timePerQuestion = Math.max(5, timePerQuestion - 1);
+      maxNumber = Math.min(25, maxNumber + 10);
+      operationTypes = ['add', 'subtract'];
+      totalQuestions = Math.min(12, totalQuestions + 2);
+    } else if (accuracy < 0.5) {
+      timePerQuestion = Math.min(12, timePerQuestion + 2);
+      maxNumber = Math.max(5, maxNumber - 3);
+      operationTypes = ['add'];
+    }
+
+    if (recentGames >= 5 && accuracy >= 0.85) {
+      timePerQuestion = Math.max(3, timePerQuestion - 1);
+    }
+
+    return { timePerQuestion, maxNumber, operationTypes, totalQuestions };
+  }
   
   // Get default difficulty for new users
   static getDefaultDifficulty(): DifficultySettings {
     return {
       memory: { cardPairs: 4, previewTime: 3 },
       logic: { sequenceLength: 4, complexityLevel: 1, totalRounds: 8 },
-      attention: { spawnRate: 1.0, targetRatio: 0.3, gameSpeed: 1.0, duration: 60 }
+      attention: { spawnRate: 1.0, targetRatio: 0.3, gameSpeed: 1.0, duration: 60 },
+      speed: { timePerQuestion: 8, maxNumber: 10, operationTypes: ['add'], totalQuestions: 10 },
     };
   }
   
@@ -140,20 +173,13 @@ export class DifficultyCalculator {
     
     switch (gameType) {
       case 'memory':
-        return {
-          ...defaultSettings,
-          memory: this.calculateMemoryDifficulty(metrics)
-        };
+        return { ...defaultSettings, memory: this.calculateMemoryDifficulty(metrics) };
       case 'logic':
-        return {
-          ...defaultSettings,
-          logic: this.calculateLogicDifficulty(metrics)
-        };
+        return { ...defaultSettings, logic: this.calculateLogicDifficulty(metrics) };
       case 'attention':
-        return {
-          ...defaultSettings,
-          attention: this.calculateAttentionDifficulty(metrics)
-        };
+        return { ...defaultSettings, attention: this.calculateAttentionDifficulty(metrics) };
+      case 'speed':
+        return { ...defaultSettings, speed: this.calculateSpeedDifficulty(metrics) };
       default:
         return defaultSettings;
     }

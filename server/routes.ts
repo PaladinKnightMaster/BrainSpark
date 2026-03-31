@@ -107,6 +107,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Weekly progress per game
+  app.get('/api/stats/weekly', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const weekly = await storage.getWeeklyProgress(userId);
+      res.json(weekly);
+    } catch (error) {
+      console.error("Error fetching weekly progress:", error);
+      res.status(500).json({ message: "Failed to fetch weekly progress" });
+    }
+  });
+
+  // Today's completed games
+  app.get('/api/stats/today', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const completed = await storage.getTodayCompletedGames(userId);
+      res.json({ completed });
+    } catch (error) {
+      console.error("Error fetching today's completions:", error);
+      res.status(500).json({ message: "Failed to fetch today's completions" });
+    }
+  });
+
   // Get adaptive difficulty settings for a game
   app.get("/api/difficulty/:gameType", isAuthenticated, async (req: any, res) => {
     try {
@@ -122,6 +146,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         gameSettings = allSettings.logic;
       } else if (gameType === 'attention') {
         gameSettings = allSettings.attention;
+      } else if (gameType === 'speed') {
+        gameSettings = allSettings.speed;
       } else {
         return res.status(400).json({ message: "Invalid game type" });
       }

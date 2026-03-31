@@ -13,7 +13,7 @@ import {
 } from "@shared/schema";
 import { DifficultyCalculator, type PerformanceMetrics, type DifficultySettings } from "@shared/difficulty-calculator";
 import { db } from "./db";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, gte, lt } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -33,7 +33,15 @@ export interface IStorage {
     streak: number;
     level: number;
     trainingTime: number;
+    sessionsPlayed: number;
   }>;
+  getWeeklyProgress(userId: string): Promise<{
+    memory: number;
+    logic: number;
+    attention: number;
+    speed: number;
+  }>;
+  getTodayCompletedGames(userId: string): Promise<string[]>;
   
   // Training plans
   getUserTrainingPlan(userId: string): Promise<TrainingPlan | undefined>;
@@ -111,6 +119,7 @@ export class DatabaseStorage implements IStorage {
         target: [userProgress.userId, userProgress.gameType],
         set: {
           ...progress,
+          totalScore: sql`${userProgress.totalScore} + ${progress.totalScore || 0}`,
           updatedAt: new Date(),
         },
       })
@@ -123,9 +132,10 @@ export class DatabaseStorage implements IStorage {
     streak: number;
     level: number;
     trainingTime: number;
+    sessionsPlayed: number;
   }> {
     const progressData = await this.getUserProgress(userId);
-    const sessions = await this.getUserGameSessions(userId, 50);
+    const sessions = await this.getUserGameSessions(userId, 100);
     
     const totalScore = progressData.reduce((sum, p) => sum + (p.totalScore || 0), 0);
     const maxStreak = Math.max(...progressData.map(p => p.streak || 0), 0);
@@ -138,8 +148,71 @@ export class DatabaseStorage implements IStorage {
       totalScore,
       streak: maxStreak,
       level: avgLevel,
-      trainingTime: Math.round(trainingTime / 60), // Convert to minutes
+      trainingTime: Math.round(trainingTime / 60),
+      sessionsPlayed: sessions.length,
     };
+  }
+
+  async getWeeklyProgress(userId: string): Promise<{
+    memory: number;
+    logic: number;
+    attention: number;
+    speed: number;
+  }> {
+    // Get all sessions for this user, ordered newest first
+    const allSessions = await db
+      .select()
+      .from(gameSessions)
+      .where(eq(gameSessions.userId, userId))
+      .orderBy(desc(gameSessions.completedAt))
+      .limit(50);
+
+    const gameTypes = ['memory', 'logic', 'attention', 'speed'];
+    const result: Record<string, number> = { memory: 0, logic: 0, attention: 0, speed: 0 };
+
+    for (const gameType of gameTypes) {
+      const typeSessions = allSessions.filter(s => s.gameType === gameType);
+      if (typeSessions.length < 2) {
+        // New to this game — show a positive baseline
+        result[gameType] = typeSessions.length === 1 ? 5 : 0;
+        continue;
+      }
+
+      // Compare recent 3 sessions vs previous 3 sessions by accuracy
+      const recent = typeSessions.slice(0, Math.min(3, Math.floor(typeSessions.length / 2)));
+      const older = typeSessions.slice(recent.length, recent.length * 2);
+
+      const avgRecent = recent.reduce((s, g) => s + (g.accuracy || 70), 0) / recent.length;
+      const avgOlder = older.reduce((s, g) => s + (g.accuracy || 70), 0) / older.length;
+
+      if (avgOlder === 0) {
+        result[gameType] = 0;
+      } else {
+        result[gameType] = Math.round(((avgRecent - avgOlder) / avgOlder) * 100);
+      }
+    }
+
+    return result as { memory: number; logic: number; attention: number; speed: number };
+  }
+
+  async getTodayCompletedGames(userId: string): Promise<string[]> {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const todaySessions = await db
+      .select({ gameType: gameSessions.gameType })
+      .from(gameSessions)
+      .where(
+        and(
+          eq(gameSessions.userId, userId),
+          gte(gameSessions.completedAt, todayStart),
+          lt(gameSessions.completedAt, todayEnd)
+        )
+      );
+
+    return [...new Set(todaySessions.map(s => s.gameType))];
   }
 
   async getUserTrainingPlan(userId: string): Promise<TrainingPlan | undefined> {
@@ -171,35 +244,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserPerformanceMetrics(userId: string, gameType: string): Promise<PerformanceMetrics> {
-    // Get recent game sessions for this user and game type
     const recentSessions = await db
       .select()
       .from(gameSessions)
       .where(and(eq(gameSessions.userId, userId), eq(gameSessions.gameType, gameType)))
       .orderBy(desc(gameSessions.completedAt))
-      .limit(10); // Look at last 10 games
+      .limit(10);
 
     if (recentSessions.length === 0) {
-      // New user - return neutral metrics
       return {
-        accuracy: 0.7, // Start with decent baseline
+        accuracy: 0.7,
         avgTime: 60,
         streak: 0,
         recentGames: 0
       };
     }
 
-    // Calculate metrics from recent sessions
     const totalAccuracy = recentSessions.reduce((sum, session) => sum + (session.accuracy || 70), 0);
-    const avgAccuracy = totalAccuracy / recentSessions.length / 100; // Convert to 0-1 scale
+    const avgAccuracy = totalAccuracy / recentSessions.length / 100;
 
     const totalTime = recentSessions.reduce((sum, session) => sum + session.duration, 0);
     const avgTime = totalTime / recentSessions.length;
 
-    // Calculate current streak (consecutive good performances)
     let streak = 0;
     for (const session of recentSessions) {
-      if ((session.accuracy || 0) >= 70) { // 70% accuracy threshold for "good" performance
+      if ((session.accuracy || 0) >= 70) {
         streak++;
       } else {
         break;

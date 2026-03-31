@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import mobileAppMockup from "@/assets/Mobile_app_interface_mockup_eddc62bd.png";
 import brainVisualization from "@/assets/Premium_brain_visualization_hero_c991f018.png";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,9 +10,55 @@ import { FeatureCard } from "@/components/feature-card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
+function useScrollReveal() {
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    );
+    const elements = document.querySelectorAll('.scroll-reveal');
+    elements.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+}
+
+function AnimatedCounter({ target, suffix = '' }: { target: number; suffix?: string }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && !hasAnimated.current) {
+        hasAnimated.current = true;
+        const duration = 1500;
+        const steps = 50;
+        const increment = target / steps;
+        let current = 0;
+        const timer = setInterval(() => {
+          current = Math.min(current + increment, target);
+          setCount(Math.floor(current));
+          if (current >= target) clearInterval(timer);
+        }, duration / steps);
+      }
+    }, { threshold: 0.5 });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [target]);
+
+  return <div ref={ref}>{count}{suffix}</div>;
+}
+
 export default function Landing() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  useScrollReveal();
 
   const handleGetStarted = () => {
     setAuthMode('signup');
@@ -219,15 +265,19 @@ export default function Landing() {
           </div>
           
           <div className="grid md:grid-cols-3 gap-8 mb-16">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-primary mb-2" data-testid="stat-users">10M+</div>
+            <div className="text-center scroll-reveal">
+              <div className="text-4xl font-bold text-primary mb-2" data-testid="stat-users">
+                <AnimatedCounter target={10} suffix="M+" />
+              </div>
               <div className="text-muted-foreground">Active Users</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-accent mb-2" data-testid="stat-improvement">15%</div>
+            <div className="text-center scroll-reveal" style={{ transitionDelay: '0.1s' }}>
+              <div className="text-4xl font-bold text-accent mb-2" data-testid="stat-improvement">
+                <AnimatedCounter target={15} suffix="%" />
+              </div>
               <div className="text-muted-foreground">Average Improvement</div>
             </div>
-            <div className="text-center">
+            <div className="text-center scroll-reveal" style={{ transitionDelay: '0.2s' }}>
               <div className="text-4xl font-bold text-chart-3 mb-2" data-testid="stat-rating">4.8/5</div>
               <div className="text-muted-foreground">User Rating</div>
             </div>
@@ -295,6 +345,70 @@ export default function Landing() {
             <p className="text-sm text-muted-foreground">
               Research partnerships with Stanford University, MIT, and the National Institute of Health
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section className="py-24 bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16 scroll-reveal">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">What Our Users Say</h2>
+            <p className="text-xl text-muted-foreground">Real people, real cognitive improvements</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                name: "Sarah K.",
+                role: "Software Engineer",
+                avatar: "SK",
+                rating: 5,
+                quote: "After 3 months with BrainBoost, I notice a real difference in my focus during long coding sessions. The adaptive difficulty keeps it challenging without feeling overwhelming.",
+                color: "bg-primary/10 text-primary",
+              },
+              {
+                name: "Marcus T.",
+                role: "Medical Student",
+                avatar: "MT",
+                rating: 5,
+                quote: "The memory games have genuinely helped with my studies. I can retain medical terminology much better. The 5-minute sessions fit perfectly into my study breaks.",
+                color: "bg-accent/10 text-accent",
+              },
+              {
+                name: "Priya R.",
+                role: "Project Manager",
+                avatar: "PR",
+                rating: 5,
+                quote: "I love how it tracks my progress and adjusts automatically. I've improved my logic score by 40% over two months. The streak system keeps me coming back daily.",
+                color: "bg-chart-3/10 text-chart-3",
+              },
+            ].map((t, i) => (
+              <Card
+                key={i}
+                className="p-6 premium-shadow scroll-reveal hover:shadow-xl transition-shadow duration-300"
+                style={{ transitionDelay: `${i * 0.1}s` }}
+              >
+                <CardContent className="p-0">
+                  <div className="flex items-center gap-1 mb-4">
+                    {Array.from({ length: t.rating }).map((_, si) => (
+                      <i key={si} className="fas fa-star text-chart-4 text-sm"></i>
+                    ))}
+                  </div>
+                  <p className="text-muted-foreground mb-6 leading-relaxed italic">
+                    "{t.quote}"
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${t.color}`}>
+                      {t.avatar}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-card-foreground text-sm">{t.name}</div>
+                      <div className="text-xs text-muted-foreground">{t.role}</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       </section>

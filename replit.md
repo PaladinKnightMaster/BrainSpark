@@ -1,8 +1,8 @@
-# Brain Training Game Platform
+# Brain Training Game Platform — BrainBoost
 
 ## Overview
 
-A full-stack cognitive training platform featuring brain games designed to improve memory, logic, attention, and problem-solving skills. The application provides adaptive difficulty, progress tracking, and personalized training plans with premium subscription features powered by Stripe integration.
+A full-stack cognitive training platform featuring four brain games designed to improve memory, logic, attention, and processing speed. The application provides adaptive difficulty, real-time progress tracking, personalized training plans, and premium subscription features powered by Stripe.
 
 ## User Preferences
 
@@ -46,23 +46,37 @@ Preferred communication style: Simple, everyday language.
 - **Progress Analytics**: Aggregated statistics for skill development and streak tracking
 - **Premium Features**: Stripe customer and subscription ID storage for payment integration
 
+## Games Implemented
+
+1. **Memory Card Game** — Flip cards to find matching pairs. Adaptive: card pairs (4–12), preview time (1–5s)
+2. **Logic Puzzle** — Complete number/pattern sequences. Adaptive: sequence length, complexity, rounds
+3. **Attention Game** — Click targets while avoiding distractors. Adaptive: spawn rate, target ratio, game speed
+4. **Speed Math** — Answer arithmetic questions under time pressure. Adaptive: time per question, number range, operation types
+
+## Key API Endpoints
+
+- `GET /api/auth/user` — current authenticated user
+- `POST /api/game-sessions` — save a completed game session
+- `GET /api/game-sessions` — recent sessions (last 10)
+- `GET /api/stats` — aggregate stats (score, streak, level, trainingTime, sessionsPlayed)
+- `GET /api/stats/weekly` — per-game improvement % vs prior sessions
+- `GET /api/stats/today` — which games were completed today
+- `GET /api/progress` — per-game progress records
+- `GET /api/difficulty/:gameType` — adaptive difficulty settings for a game
+- `GET /api/performance/:gameType` — raw performance metrics
+- `GET /api/training-plan` — user's active training plan
+- `POST /api/create-subscription` — Stripe subscription creation
+
 ## External Dependencies
 
 ### Third-Party Services
 - **Neon Database**: Serverless PostgreSQL hosting with connection pooling
 - **Replit Authentication**: OAuth 2.0 / OpenID Connect identity provider
 - **Stripe Payment Processing**: Subscription management and payment handling
-- **Replit Development Tools**: Banner injection and cartographer for development environment
 
 ### Key Libraries and Frameworks
-- **Frontend**: React, TypeScript, Vite, Wouter, TanStack Query, Radix UI, Tailwind CSS
+- **Frontend**: React, TypeScript, Vite, Wouter, TanStack Query, Radix UI, Tailwind CSS, Lucide Icons
 - **Backend**: Express.js, Passport.js, Drizzle ORM, connect-pg-simple
 - **Database**: @neondatabase/serverless, drizzle-orm, pg
 - **Authentication**: openid-client, express-session, memoizee
 - **Payment**: @stripe/stripe-js, @stripe/react-stripe-js
-- **Development**: tsx, esbuild, various Replit plugins
-
-### API Integrations
-- **Replit OIDC**: User authentication and profile management
-- **Stripe API**: Subscription creation, payment processing, and webhook handling
-- **Internal APIs**: RESTful endpoints for game sessions, progress tracking, and user statistics
