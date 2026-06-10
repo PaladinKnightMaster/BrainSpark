@@ -210,8 +210,9 @@ export default function Dashboard() {
       const [moves, time, accuracy, difficultySettings] = additionalData;
       sessionData = { ...sessionData, duration: time, moves, accuracy: accuracy ? Math.round(accuracy) : undefined, totalAttempts: moves, difficultySettings };
     } else if (gameType === 'logic') {
-      const [correct, total, difficultySettings] = additionalData;
-      sessionData = { ...sessionData, duration: 180, correctAnswers: correct, totalAttempts: total, accuracy: total > 0 ? Math.round((correct / total) * 100) : 0, difficultySettings };
+      // FIX: 4th param is now real elapsed duration (was hardcoded 180s), 5th is difficultySettings
+      const [correct, total, duration, difficultySettings] = additionalData;
+      sessionData = { ...sessionData, duration: duration || 180, correctAnswers: correct, totalAttempts: total, accuracy: total > 0 ? Math.round((correct / total) * 100) : 0, difficultySettings };
     } else if (gameType === 'attention') {
       const [accuracy, level, difficultySettings] = additionalData;
       sessionData = { ...sessionData, duration: difficultySettings?.duration || 60, accuracy: accuracy ? Math.round(accuracy) : undefined, correctAnswers: level, difficultySettings };
@@ -294,7 +295,7 @@ export default function Dashboard() {
           )}
           {activeGame === 'logic' && (
             <LogicPuzzle
-              onGameComplete={(score, correct, total, ds) => handleGameComplete('logic', score, correct, total, ds)}
+              onGameComplete={(score, correct, total, duration, ds) => handleGameComplete('logic', score, correct, total, duration, ds)}
               onClose={() => setActiveGame(null)}
             />
           )}
@@ -385,7 +386,16 @@ export default function Dashboard() {
           <StatCard
             icon="fas fa-trophy"
             iconColor="text-chart-4"
-            badge="+5% this week"
+            badge={
+              weeklyProgress
+                ? (() => {
+                    const avg = Math.round(
+                      (weeklyProgress.memory + weeklyProgress.logic + weeklyProgress.attention + weeklyProgress.speed) / 4
+                    );
+                    return avg > 0 ? `+${avg}% this week` : avg < 0 ? `${avg}% this week` : 'All-time';
+                  })()
+                : 'All-time'
+            }
             badgeColor="bg-chart-4/10 text-chart-4"
             value={(stats?.totalScore || 0).toLocaleString()}
             label="Total Score"

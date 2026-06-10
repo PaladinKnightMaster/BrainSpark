@@ -20,11 +20,11 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserStripeInfo(userId: string, customerId: string, subscriptionId: string): Promise<User>;
-  
+
   // Game operations
   createGameSession(session: InsertGameSession): Promise<GameSession>;
   getUserGameSessions(userId: string, limit?: number): Promise<GameSession[]>;
-  
+
   // Progress operations
   getUserProgress(userId: string): Promise<UserProgress[]>;
   upsertUserProgress(progress: InsertUserProgress): Promise<UserProgress>;
@@ -42,11 +42,11 @@ export interface IStorage {
     speed: number;
   }>;
   getTodayCompletedGames(userId: string): Promise<string[]>;
-  
+
   // Training plans
   getUserTrainingPlan(userId: string): Promise<TrainingPlan | undefined>;
   createDefaultTrainingPlan(userId: string): Promise<TrainingPlan>;
-  
+
   // Adaptive difficulty
   getUserPerformanceMetrics(userId: string, gameType: string): Promise<PerformanceMetrics>;
   getDifficultySettings(userId: string, gameType: string): Promise<DifficultySettings>;
@@ -118,9 +118,12 @@ export class DatabaseStorage implements IStorage {
       .onConflictDoUpdate({
         target: [userProgress.userId, userProgress.gameType],
         set: {
-          ...progress,
+          currentLevel: progress.currentLevel,
+          lastPlayedAt: progress.lastPlayedAt,
+          // Accumulate total score across all sessions for this game type
           totalScore: sql`${userProgress.totalScore} + ${progress.totalScore || 0}`,
           updatedAt: new Date(),
+          // streak is now computed from sessions in getUserStats; keep column for compatibility
         },
       })
       .returning();
@@ -135,18 +138,46 @@ export class DatabaseStorage implements IStorage {
     sessionsPlayed: number;
   }> {
     const progressData = await this.getUserProgress(userId);
-    const sessions = await this.getUserGameSessions(userId, 100);
-    
+    // Fetch enough sessions for both time/count stats and streak calculation
+    const sessions = await this.getUserGameSessions(userId, 200);
+
     const totalScore = progressData.reduce((sum, p) => sum + (p.totalScore || 0), 0);
-    const maxStreak = Math.max(...progressData.map(p => p.streak || 0), 0);
-    const avgLevel = progressData.length > 0 
+    const avgLevel = progressData.length > 0
       ? Math.round(progressData.reduce((sum, p) => sum + (p.currentLevel || 1), 0) / progressData.length)
       : 1;
     const trainingTime = sessions.reduce((sum, s) => sum + s.duration, 0);
-    
+
+    // FIX: Calculate real consecutive-day streak from game_sessions history.
+    // Previous code used max(userProgress.streak) which was always 0 or 1.
+    const MS_PER_DAY = 86400000;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+
+    // Collect unique play-day timestamps (midnight-normalised)
+    const playDaySet = new Set<number>();
+    for (const s of sessions) {
+      if (s.completedAt) {
+        const d = new Date(s.completedAt);
+        d.setHours(0, 0, 0, 0);
+        playDaySet.add(d.getTime());
+      }
+    }
+
+    // Count backwards from today (or yesterday if no session today)
+    let streak = 0;
+    let checkMs = todayMs;
+    if (!playDaySet.has(checkMs)) {
+      checkMs -= MS_PER_DAY; // streak can still be valid if user played yesterday
+    }
+    while (playDaySet.has(checkMs)) {
+      streak++;
+      checkMs -= MS_PER_DAY;
+    }
+
     return {
       totalScore,
-      streak: maxStreak,
+      streak,
       level: avgLevel,
       trainingTime: Math.round(trainingTime / 60),
       sessionsPlayed: sessions.length,
@@ -159,7 +190,6 @@ export class DatabaseStorage implements IStorage {
     attention: number;
     speed: number;
   }> {
-    // Get all sessions for this user, ordered newest first
     const allSessions = await db
       .select()
       .from(gameSessions)
@@ -173,12 +203,10 @@ export class DatabaseStorage implements IStorage {
     for (const gameType of gameTypes) {
       const typeSessions = allSessions.filter(s => s.gameType === gameType);
       if (typeSessions.length < 2) {
-        // New to this game — show a positive baseline
         result[gameType] = typeSessions.length === 1 ? 5 : 0;
         continue;
       }
 
-      // Compare recent 3 sessions vs previous 3 sessions by accuracy
       const recent = typeSessions.slice(0, Math.min(3, Math.floor(typeSessions.length / 2)));
       const older = typeSessions.slice(recent.length, recent.length * 2);
 

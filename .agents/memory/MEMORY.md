@@ -1,0 +1,4 @@
+- [Speed Math input automation](speed-math-input.md) — Playwright fill() doesn't trigger React onChange on controlled number inputs; use onInput + inputRef fallback in handleSubmit
+- [Streak calculation](streak-calculation.md) — user_progress.streak is a legacy 0/1 column; real consecutive-day streak is computed fresh in getUserStats from game_sessions history
+- [Game completion double-fire](game-completion-guards.md) — all 4 games use a ref guard (gameCompletedRef) to prevent onGameComplete being called twice; stale closure in Attention Game fixed with scoreRef/correctClicksRef/totalClicksRef/levelRef
+- [Logic puzzle options](logic-puzzle-options.md) — buildOptions() uses iterative fallback to always produce exactly 3 choices; sequential progression pattern exhausted SHAPES pool without it

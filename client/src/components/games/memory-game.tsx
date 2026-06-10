@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,8 +27,9 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
   const [startTime] = useState(Date.now());
   const [gameTime, setGameTime] = useState(0);
   const [showPreview, setShowPreview] = useState(true);
+  const previewStartRef = useRef<number>(Date.now());
+  const gameCompletedRef = useRef(false);
 
-  // Fetch adaptive difficulty settings from API
   const { data: difficultySettings, isLoading } = useQuery<{
     cardPairs: number;
     previewTime: number;
@@ -36,26 +37,23 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
     queryKey: ['/api/difficulty/memory'],
   });
 
-  // Adaptive difficulty settings
   const cardPairs = difficultySettings?.cardPairs || 4;
   const previewTime = difficultySettings?.previewTime || 3;
 
-  // Initialize cards
   const initializeGame = useCallback(() => {
     if (!difficultySettings) return;
-    
-    // Use adaptive number of card pairs
+
     const cardsToUse = CARD_VALUES.slice(0, cardPairs);
     const shuffledValues = [...cardsToUse, ...cardsToUse]
       .sort(() => Math.random() - 0.5);
-    
+
     const newCards = shuffledValues.map((value, index) => ({
       id: index,
       value,
       isFlipped: false,
       isMatched: false,
     }));
-    
+
     setCards(newCards);
     setFlippedCards([]);
     setMoves(0);
@@ -63,8 +61,11 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
     setIsGameComplete(false);
     setGameTime(0);
     setShowPreview(true);
-    
-    // Show cards for preview time, then hide them
+    gameCompletedRef.current = false;
+
+    // Reset preview start time so countdown is correct after restart
+    previewStartRef.current = Date.now();
+
     setTimeout(() => {
       setShowPreview(false);
     }, previewTime * 1000);
@@ -76,7 +77,7 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
     }
   }, [initializeGame, difficultySettings, isLoading]);
 
-  // Update game time
+  // Game timer
   useEffect(() => {
     if (!isGameComplete) {
       const interval = setInterval(() => {
@@ -94,21 +95,18 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
     const newFlippedCards = [...flippedCards, cardId];
     setFlippedCards(newFlippedCards);
 
-    // Flip the card
     setCards(prev => prev.map(card =>
       card.id === cardId ? { ...card, isFlipped: true } : card
     ));
 
-    // Check for match when two cards are flipped
     if (newFlippedCards.length === 2) {
       setMoves(prev => prev + 1);
-      
+
       const [firstId, secondId] = newFlippedCards;
       const firstCard = cards.find(c => c.id === firstId);
       const secondCard = cards.find(c => c.id === secondId);
 
       if (firstCard && secondCard && firstCard.value === secondCard.value) {
-        // Match found
         setTimeout(() => {
           setCards(prev => prev.map(card =>
             card.id === firstId || card.id === secondId
@@ -119,7 +117,6 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
           setFlippedCards([]);
         }, 500);
       } else {
-        // No match - flip cards back
         setTimeout(() => {
           setCards(prev => prev.map(card =>
             card.id === firstId || card.id === secondId
@@ -132,16 +129,18 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
     }
   };
 
-  // Check for game completion
+  // FIX: guard with matchedPairs > 0 and !isGameComplete to prevent double-fire
+  // when parent re-renders (new onGameComplete ref) after mutation success
   useEffect(() => {
-    if (matchedPairs === cardPairs) {
+    if (matchedPairs > 0 && matchedPairs === cardPairs && !isGameComplete && !gameCompletedRef.current) {
+      gameCompletedRef.current = true;
       setIsGameComplete(true);
       const finalTime = Math.floor((Date.now() - startTime) / 1000);
       const score = Math.max(1000 - (moves * 10) - (finalTime * 2), 100);
-      const accuracy = matchedPairs / Math.max(moves, 1) * 100; // Efficiency percentage
+      const accuracy = matchedPairs / Math.max(moves, 1) * 100;
       onGameComplete(score, moves, finalTime, accuracy, difficultySettings || { cardPairs, previewTime });
     }
-  }, [matchedPairs, cardPairs, moves, startTime, onGameComplete, difficultySettings]);
+  }, [matchedPairs, cardPairs, isGameComplete]);
 
   const restartGame = () => {
     initializeGame();
@@ -157,6 +156,9 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
       </Card>
     );
   }
+
+  // FIX: preview countdown uses previewStartRef instead of stale startTime
+  const previewSecondsLeft = Math.max(0, Math.ceil((previewTime * 1000 - (Date.now() - previewStartRef.current)) / 1000));
 
   return (
     <Card className="w-full max-w-4xl mx-auto premium-shadow">
@@ -177,7 +179,7 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
           <div data-testid="memory-moves">Moves: {moves}</div>
           <div data-testid="memory-time">Time: {gameTime}s</div>
           <div data-testid="memory-pairs">Pairs: {matchedPairs}/{cardPairs}</div>
-          {showPreview && <div className="text-primary">Preview: {Math.ceil((previewTime * 1000 - (Date.now() - startTime)) / 1000)}s</div>}
+          {showPreview && <div className="text-primary">Preview: {previewSecondsLeft}s</div>}
         </div>
       </CardHeader>
       <CardContent>
@@ -223,7 +225,7 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
             ))}
           </div>
         )}
-        
+
         {!isGameComplete && (
           <div className="mt-6 text-center">
             <Button variant="outline" onClick={restartGame} data-testid="button-restart-memory-mid">

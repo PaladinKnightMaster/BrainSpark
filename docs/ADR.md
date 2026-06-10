@@ -1,205 +1,184 @@
 # Architecture Decision Records — BrainBoost
 
 **Template:** [MADR](https://adr.github.io/madr/)  
+**Date:** June 2026  
 **Status:** Active
 
 ---
 
-## ADR-001: Monolithic Architecture over Microservices
+## ADR-001: Monolith over Microservices
 
-**Date:** January 2026  
-**Status:** Accepted
+**Status:** Accepted  
+**Date:** Initial build
 
-### Context
-BrainBoost is a new product serving individual end users. The team is small and the primary concerns are shipping speed, operational simplicity, and cost efficiency.
+**Context:** Small team (1–2 engineers), MVP timeline, cost constraints.
 
-### Decision
-Use a single Express.js process serving both the REST API and static frontend assets. Do not split into separate microservices for auth, games, progress, or payments.
+**Decision:** Single Express.js server handles both API and static file serving on port 5000.
 
-### Rationale
-- **Team size**: A microservice architecture requires dedicated infrastructure, CI/CD per service, distributed tracing, and service discovery — all significant overhead for a small team.
-- **Operational cost**: A single process on Replit costs a fraction of orchestrating multiple containers.
-- **Latency**: In-process function calls are faster than inter-service HTTP; for a latency-sensitive gaming app this matters.
-- **Data consistency**: A monolith avoids distributed transactions when saving a game session and updating progress simultaneously.
+**Consequences:**
+- (+) Single deployment, single codebase, zero network latency between "services"
+- (+) Shared TypeScript types between client and server via `shared/` without a separate schema registry
+- (+) Lowest operational cost on Replit Deployments
+- (−) Cannot scale API and frontend independently
+- (−) A backend crash also takes down static file serving
 
-### Consequences
-- Horizontal scaling requires the entire application to scale together (acceptable at current traffic).
-- Deployment is simple: one service, one process, one configuration.
-- If the team grows or a component needs independent scaling (e.g., game difficulty AI), it can be extracted into a microservice without breaking the monolith.
-
-### Migration Path to Microservices (Future)
-If traffic demands it, the clean separation of `storage.ts` (data layer) and `routes.ts` (API) makes it straightforward to extract services behind an API gateway pattern.
+**Migration path:** When traffic justifies it, split at the Vite static serving layer — put API behind `/api/` on a separate service and serve statics via CDN.
 
 ---
 
-## ADR-002: PostgreSQL as the Single Data Store
+## ADR-002: PostgreSQL over NoSQL
 
-**Date:** January 2026  
-**Status:** Accepted
+**Status:** Accepted  
+**Date:** Initial build
 
-### Context
-The application needs to store user sessions, game results, progress aggregates, and training plans. Multiple storage technology options were considered: SQLite, PostgreSQL, MongoDB, Redis.
+**Context:** Need structured user data, game sessions, progress tracking, and Stripe metadata. Session store requires a persistent backing store.
 
-### Decision
-Use a single PostgreSQL database (via Neon serverless) for all data, including session storage.
+**Decision:** PostgreSQL via Neon serverless with Drizzle ORM.
 
-### Rationale
-- **Relational integrity**: Foreign key constraints between users → game_sessions → user_progress ensure data consistency without application-level enforcement.
-- **JSON support**: PostgreSQL's `JSONB` column type stores variable game metrics and training plan configurations without requiring additional schema changes per game type.
-- **Session storage**: `connect-pg-simple` stores Express sessions in the same PostgreSQL database, eliminating the need for a separate Redis instance.
-- **Neon serverless**: Zero infrastructure management, automatic connection pooling, compatible with Drizzle ORM.
+**Rationale:**
+- Relational integrity (game_sessions → users FK) important for data quality
+- `connect-pg-simple` requires a PostgreSQL-compatible session store
+- Neon serverless handles connection pooling — avoids connection exhaustion in serverless/containerised environments
+- JSONB columns (`difficultySettings`, `games`) give flexibility for schema evolution without migrations
+- Drizzle provides TypeScript-first schema definition with inferred types
 
-### Rejected Alternatives
-- **SQLite**: No concurrent writes at scale; not suitable for multi-user production.
-- **MongoDB**: Schema flexibility is a benefit, but the app's relational data (users ↔ sessions ↔ progress) is better expressed with SQL joins and constraints.
-- **Redis + PostgreSQL**: Adding Redis for sessions would increase operational complexity without meaningful benefit at current scale.
-
-### Consequences
-- Single point of failure for all data; mitigated by Neon's HA and point-in-time recovery.
-- JSONB for `difficultySettings` and `games` trades some query-ability for schema flexibility.
+**Consequences:**
+- (+) Type-safe queries without a separate type layer
+- (+) JSONB for game settings avoids premature schema normalisation
+- (+) Native support for upserts (`ON CONFLICT DO UPDATE`) used in progress tracking
+- (−) Cannot use edge deployment (Neon is regional)
 
 ---
 
 ## ADR-003: Replit OIDC over Custom Auth
 
-**Date:** January 2026  
-**Status:** Accepted
+**Status:** Accepted  
+**Date:** Initial build
 
-### Context
-The application needs user authentication. Options considered: custom email/password auth, Firebase Auth, Auth0, Clerk, Replit OIDC.
+**Context:** Need user identity to associate game sessions and subscriptions. Building password auth (hashing, resets, MFA) is significant scope.
 
-### Decision
-Use Replit's built-in OpenID Connect provider via Passport.js.
+**Decision:** Use Replit's built-in OpenID Connect provider (`openid-client` + Passport.js strategy).
 
-### Rationale
-- **Zero credential management**: No password storage, hashing, or reset flows to implement.
-- **Platform integration**: Running on Replit, the OIDC provider is built into the platform — no third-party dependency.
-- **Security by default**: OAuth 2.0 + OIDC with HTTP-only session cookies eliminates common auth vulnerabilities.
-- **User experience**: Users who sign up on Replit can use their existing account.
+**Rationale:**
+- Zero password management, zero credential storage
+- Replit users (the target audience) already have accounts
+- Built-in token refresh via `refresh_token` grant
+- REPLIT_DOMAINS / REPL_ID are auto-injected into environment
 
-### Rejected Alternatives
-- **Custom email/password**: Significant security surface area (password storage, hashing, reset, verification emails).
-- **Auth0 / Clerk**: Third-party SaaS with associated costs; unnecessary dependency for Replit-native deployment.
-
-### Consequences
-- Authentication is tied to Replit accounts; users must have a Replit account.
-- Auth provider is Replit-specific; migrating to a different provider later would require re-implementing the Passport.js strategy.
+**Consequences:**
+- (+) Launch in days not weeks
+- (+) No security surface for credential attacks
+- (−) Users without Replit accounts cannot sign up
+- (−) Auth is not portable if the app moves off Replit
 
 ---
 
-## ADR-004: TanStack Query for All Client-Server State
+## ADR-004: Drizzle ORM over Prisma
 
-**Date:** January 2026  
-**Status:** Accepted
+**Status:** Accepted  
+**Date:** Initial build
 
-### Context
-The dashboard shows multiple independent data sets: user stats, weekly progress, today's completions, recent sessions, difficulty settings, and game-specific data. These need to stay synchronized after mutations (game completion).
+**Context:** Need type-safe DB access in TypeScript. Major options: Prisma, Drizzle, raw SQL, Kysely.
 
-### Decision
-Use TanStack Query (React Query v5) for all server state management with a shared global `QueryClient`.
+**Decision:** Drizzle ORM.
 
-### Rationale
-- **Automatic invalidation**: After saving a game session, invalidating `['/api/stats']`, `['/api/stats/weekly']`, etc. causes all affected components to refetch automatically.
-- **Loading states**: Built-in `isLoading` and `isPending` flags enable skeleton/spinner UIs without boilerplate.
-- **Deduplication**: Multiple components requesting the same endpoint share a single network request.
-- **No Redux boilerplate**: For server state, TanStack Query replaces Redux + sagas/thunks with minimal code.
+**Rationale:**
+- Schema-as-code in TypeScript (no `.prisma` file) — easier to share types with frontend via `shared/`
+- `drizzle-zod` generates Zod validation schemas from the same table definitions → single source of truth
+- Lightweight runtime (no query engine process)
+- SQL-like query builder is easier to reason about than Prisma's Rust engine
 
-### Consequences
-- Global state that is purely client-side (e.g., active game mode) remains in local `useState`.
-- Cache keys must be carefully designed (array format) to enable precise invalidation.
-
----
-
-## ADR-005: Adaptive Difficulty via Server-Side Calculation
-
-**Date:** February 2026  
-**Status:** Accepted
-
-### Context
-Games need to adjust difficulty based on player performance. This logic could live on the client, on the server, or in a shared module.
-
-### Decision
-Keep difficulty calculation logic in `shared/difficulty-calculator.ts` — compiled for both client and server — but always serve difficulty settings from the server via `GET /api/difficulty/:gameType`.
-
-### Rationale
-- **Persistence**: Difficulty must be based on historical session data from the database, which only the server can access.
-- **Cheat prevention**: Clients cannot manipulate their difficulty history to inflate scores.
-- **Shared types**: `DifficultySettings` type in the shared module ensures type safety on both sides.
-- **Testability**: The pure `DifficultyCalculator` class can be unit-tested without database setup.
-
-### Consequences
-- Each game launch requires one API call to fetch difficulty settings (acceptable; typically <50ms).
-- The difficulty algorithm is transparent and auditable in source code.
+**Consequences:**
+- (+) `createInsertSchema(table).omit({id, createdAt})` auto-generates API validation schemas
+- (+) Direct SQL fragments (`sql\`...\``) for accumulation: `total_score = total_score + EXCLUDED.total_score`
+- (−) Less mature tooling than Prisma
+- (−) No automatic migrations from schema changes (uses `db:push` which applies changes directly)
 
 ---
 
-## ADR-006: Drizzle ORM over Prisma or Raw SQL
+## ADR-005: TanStack Query over Redux / Zustand
 
-**Date:** January 2026  
-**Status:** Accepted
+**Status:** Accepted  
+**Date:** Initial build
 
-### Context
-The backend needs a type-safe way to interact with PostgreSQL. Options: raw SQL, Drizzle ORM, Prisma ORM, Knex.js.
+**Context:** Frontend needs server state management for ~8 API endpoints with caching and cache invalidation.
 
-### Decision
-Use Drizzle ORM with `drizzle-zod` for schema-first development and automatic Zod validation schema generation.
+**Decision:** TanStack Query v5 with `staleTime: Infinity`.
 
-### Rationale
-- **Type safety**: Drizzle's schema definitions in TypeScript generate precise column types, preventing runtime type errors.
-- **Bundle size**: Drizzle has a significantly smaller runtime than Prisma (no query engine binary).
-- **Shared schema**: `shared/schema.ts` exports Drizzle table definitions and derived Zod schemas used by both the backend (validation) and shared types.
-- **Upsert support**: Drizzle's `.onConflictDoUpdate()` cleanly handles the user progress upsert pattern.
+**Rationale:**
+- Eliminates boilerplate for loading/error states, caching, and refetch
+- `invalidateQueries` after mutations gives simple, explicit cache invalidation
+- `staleTime: Infinity` avoids unnecessary background refetches (data only refreshes after game saves)
+- Mutations with `onSuccess`/`onError` callbacks handle the save → invalidate → refetch loop cleanly
+- No global store needed: all state is either server-derived (React Query) or local UI state (useState)
 
-### Rejected Alternatives
-- **Prisma**: Larger bundle, separate migration tooling, generator step required; better for larger teams.
-- **Raw SQL**: Loses type safety; query results are `unknown`.
-- **Knex.js**: Type support is weaker; no schema-first approach.
-
-### Consequences
-- Schema migrations require `drizzle-kit push` or `npm run db:push`.
-- `drizzle-zod`'s `createInsertSchema` automatically generates validation schemas, keeping backend validation in sync with the database schema.
+**Consequences:**
+- (+) Zero Redux boilerplate
+- (+) Auto-typing via generic `useQuery<ResponseType>({...})`
+- (−) Stale data in secondary browser tabs (acceptable for single-user cognitive training)
 
 ---
 
-## ADR-007: Stripe for Premium Subscriptions
+## ADR-006: Server-Side Difficulty Calculation
 
-**Date:** February 2026  
-**Status:** Accepted
+**Status:** Accepted  
+**Date:** Initial build
 
-### Context
-The app has a freemium model. Premium features need a payment processor.
+**Context:** Adaptive difficulty could be computed client-side (simpler, no API call) or server-side (requires DB query).
 
-### Decision
-Use Stripe Subscriptions with client-side `@stripe/react-stripe-js` Elements for payment collection.
+**Decision:** Server-side calculation in `getDifficultySettings()` using last 10 sessions from DB.
 
-### Rationale
-- **PCI compliance**: Stripe handles all card data; the app never touches raw card numbers.
-- **Industry standard**: Stripe's developer experience, webhook system, and subscription lifecycle management are best-in-class.
-- **React integration**: `@stripe/react-stripe-js` provides pre-built, accessible payment UI components.
+**Rationale:**
+- Client doesn't have access to historical session data without an extra API call anyway
+- Server-side is cheat-proof (client cannot manipulate its own difficulty)
+- Centralises the algorithm in `DifficultyCalculator` (pure TypeScript class) which is testable in isolation
+- Algorithm can be improved without frontend changes
 
-### Consequences
-- Requires `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID` environment variables in production.
-- Stripe webhooks should be implemented for production to handle subscription lifecycle events (cancellation, renewal).
-- The `/api/create-subscription` endpoint is conditionally mounted — if `STRIPE_SECRET_KEY` is absent, the route is simply unavailable.
+**Consequences:**
+- (+) Algorithm updates deploy server-side with no client release needed
+- (+) Uses real DB history, not just the current session's data
+- (−) One extra API call (`GET /api/difficulty/:gameType`) before each game starts
+- (−) Adds 50–100ms to game start time (mitigated by loading state)
 
 ---
 
-## ADR-008: Vite for Frontend Build Tooling
+## ADR-007: Wouter over React Router
 
-**Date:** January 2026  
-**Status:** Accepted
+**Status:** Accepted  
+**Date:** Initial build
 
-### Context
-The frontend needs a build system for TypeScript compilation, bundling, and a fast development server.
+**Context:** Need client-side routing for 3 pages (Landing, Dashboard, Subscribe).
 
-### Decision
-Use Vite with the React plugin and path aliases (`@/*` → `client/src/*`, `@shared/*` → `shared/*`).
+**Decision:** Wouter (2.7KB minified+gzipped vs React Router's ~50KB).
 
-### Rationale
-- **Dev server speed**: Vite's native ESM dev server starts in milliseconds and performs hot module replacement on single-file changes.
-- **Production builds**: esbuild-powered production bundles are fast and well-optimized.
-- **Unified port**: The Vite dev server is integrated into the Express process via `server/vite.ts`, so both API and frontend run on port 5000 — no proxy configuration needed.
+**Rationale:**
+- App has 3 routes total — React Router's power is unnecessary
+- Wouter's API (`<Route>`, `useLocation`, `<Switch>`) is nearly identical to React Router v5
+- Significant bundle size reduction
 
-### Consequences
-- `server/vite.ts` and `vite.config.ts` must not be modified (they integrate with Replit's environment).
-- Path aliases must be registered in both `vite.config.ts` (frontend) and `tsconfig.json` (TypeScript server).
+**Consequences:**
+- (+) Smaller bundle, faster initial load
+- (−) Missing features: nested routes, data loaders, route-based code splitting (not needed here)
+
+---
+
+## ADR-008: Inline Game Components over Separate Pages
+
+**Status:** Accepted  
+**Date:** Initial build
+
+**Context:** Each game could be its own page (`/games/memory`) or rendered inline in the dashboard.
+
+**Decision:** Games render inline in the dashboard via `activeGame` state. The dashboard hides the main layout and renders only the active game component fullscreen.
+
+**Rationale:**
+- No route change means no session query re-fetch when returning from game
+- Dashboard's game data (stats, completion status) stays in React Query cache
+- Simpler navigation: `setActiveGame(null)` to return vs router `navigate(-1)`
+- All 4 games fit naturally as components — no URL sharing needed
+
+**Consequences:**
+- (+) Instant return to dashboard (no loading) after game ends
+- (+) Stats refresh updates are visible immediately on return
+- (−) Browser back button doesn't exit a game (mitigated by ✕ close buttons on all games)
+- (−) Cannot deep-link directly to a specific game

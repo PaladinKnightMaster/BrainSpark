@@ -89,10 +89,12 @@ export function SpeedMathGame({ onGameComplete, onClose }: SpeedMathProps) {
     setTimeout(() => inputRef.current?.focus(), 50);
   }, [difficultySettings, maxNumber, operationTypes, timePerQuestion]);
 
+  // FIX: endGame now calls onGameComplete automatically so session is always saved
   const endGame = useCallback((finalCorrect: number, finalScore: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
     setGameOver(true);
-  }, []);
+    onGameComplete(finalScore, finalCorrect, totalQuestions, difficultySettings);
+  }, [onGameComplete, totalQuestions, difficultySettings]);
 
   const handleAnswer = useCallback((answerStr: string, isTimeout = false) => {
     if (!currentQuestion || feedback || gameOver) return;
@@ -100,9 +102,9 @@ export function SpeedMathGame({ onGameComplete, onClose }: SpeedMathProps) {
 
     const parsed = parseInt(answerStr, 10);
     const isCorrect = !isTimeout && !isNaN(parsed) && parsed === currentQuestion.answer;
-    
+
     setFeedback(isCorrect ? 'correct' : 'wrong');
-    
+
     const newCorrect = isCorrect ? correctCount + 1 : correctCount;
     const timeBonus = isCorrect ? Math.max(0, Math.round((timeLeft / timePerQuestion) * 50)) : 0;
     const questionScore = isCorrect ? 100 + timeBonus : 0;
@@ -163,18 +165,16 @@ export function SpeedMathGame({ onGameComplete, onClose }: SpeedMathProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (userAnswer.trim()) handleAnswer(userAnswer.trim());
+    // Read from DOM ref as fallback for test automation (Playwright fill() may not trigger onChange)
+    const val = userAnswer || inputRef.current?.value || '';
+    if (val.trim()) handleAnswer(val.trim());
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && userAnswer.trim()) {
-      handleAnswer(userAnswer.trim());
+    const val = userAnswer || inputRef.current?.value || '';
+    if (e.key === 'Enter' && val.trim()) {
+      handleAnswer(val.trim());
     }
-  };
-
-  const handleFinish = () => {
-    const accuracy = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
-    onGameComplete(score, correctCount, totalQuestions, difficultySettings);
   };
 
   if (isLoading) {
@@ -185,7 +185,8 @@ export function SpeedMathGame({ onGameComplete, onClose }: SpeedMathProps) {
     );
   }
 
-  // Game Over Screen
+  // Game Over Screen — FIX: "Save & Continue" removed; session already saved in endGame.
+  // Both buttons just close/restart.
   if (gameOver) {
     const accuracy = Math.round((correctCount / totalQuestions) * 100);
     return (
@@ -222,9 +223,8 @@ export function SpeedMathGame({ onGameComplete, onClose }: SpeedMathProps) {
 
           <div className="flex gap-3">
             <Button variant="outline" onClick={startGame} className="flex-1">Play Again</Button>
-            <GradientButton onClick={handleFinish} className="flex-1">Save & Continue</GradientButton>
+            <GradientButton onClick={onClose} className="flex-1">Back to Dashboard</GradientButton>
           </div>
-          <Button variant="ghost" onClick={onClose} className="w-full text-muted-foreground">Back to Dashboard</Button>
         </CardContent>
       </Card>
     );
@@ -332,16 +332,18 @@ export function SpeedMathGame({ onGameComplete, onClose }: SpeedMathProps) {
             type="number"
             value={userAnswer}
             onChange={e => setUserAnswer(e.target.value)}
+            onInput={e => setUserAnswer((e.currentTarget as HTMLInputElement).value)}
             onKeyDown={handleKeyDown}
             placeholder="Type your answer..."
             className="text-center text-2xl font-mono h-16 text-lg"
+            data-testid="speed-math-input"
             disabled={!!feedback}
             autoFocus
           />
           <GradientButton
             type="submit"
             className="w-full py-4 text-lg font-semibold"
-            disabled={!userAnswer.trim() || !!feedback}
+            data-testid="button-submit-answer"
           >
             Submit Answer
           </GradientButton>

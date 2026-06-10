@@ -1,294 +1,313 @@
 # BrainBoost — User Flows & Sequence Diagrams
 
 **Version:** 1.0.0  
-**Date:** March 2026
+**Date:** June 2026
 
 ---
 
-## 1. User Flows
-
-### 1.1 New User Onboarding Flow
+## 1. Authentication Flow
 
 ```
-[Landing Page]
-      │
-      ├─ Click "Get Started" / "Sign In"
-      │         │
-      │         ▼
-      │   [Auth Modal opens]
-      │         │
-      │         ├─ Click "Continue with Replit"
-      │         ▼
-      │   [Replit OIDC Login Page]
-      │         │
-      │         ├─ User authenticates
-      │         ▼
-      │   [Callback → user created in DB]
-      │         │
-      │         ▼
-      │   [Dashboard] ◄── First visit: empty stats, default training plan
-      │
-      └─ Scroll down → Features, Science, Testimonials, Pricing
-                │
-                └─ Click pricing CTA → Auth modal → Login flow (same as above)
-```
-
-### 1.2 Daily Training Flow
-
-```
-[Dashboard]
-      │
-      ├─ See 4 game cards in "Today's Training"
-      │   Cards with ✓ badge = already completed today
-      │
-      ├─ Click "Play" on a game card
-      │         │
-      │         ▼
-      │   [Game Component mounts]
-      │         │
-      │         ├─ useQuery(['/api/difficulty/gameType'])
-      │         │   → Shows loading spinner
-      │         │   → Receives adaptive settings
-      │         │
-      │         ├─ [Game Start Screen]
-      │         │   Shows settings preview
-      │         │   "Start Game" button
-      │         │
-      │         ├─ [Active Gameplay]
-      │         │   Game-specific interaction loop
-      │         │
-      │         └─ [Game Complete Screen]
-      │               Shows score, accuracy, stats
-      │               "Save & Continue" button
-      │                     │
-      │                     ▼
-      │             POST /api/game-sessions
-      │             → Invalidates stats cache
-      │             → Dashboard stats refresh
-      │             → Training plan checks off the game
-      │
-      └─ Return to Dashboard
-            │
-            ├─ Stat cards updated (score, time, sessions)
-            ├─ Performance trend chart updated
-            └─ Today's Plan shows game as complete (strikethrough)
-```
-
-### 1.3 Premium Upgrade Flow
-
-```
-[Dashboard]
-      │
-      ├─ Click "Upgrade to Premium" button
-      │         │
-      │         ▼
-      │   [Subscribe Page (/subscribe)]
-      │         │
-      │         ├─ POST /api/create-subscription
-      │         │   → Creates Stripe Customer
-      │         │   → Creates Subscription (incomplete)
-      │         │   → Returns clientSecret
-      │         │
-      │         ├─ [Stripe Payment Element renders]
-      │         │   User enters card details
-      │         │
-      │         ├─ Click "Subscribe"
-      │         │   → stripe.confirmPayment()
-      │         │   → Stripe processes payment
-      │         │
-      │         └─ [Success / Error state]
-      │               ✓ → isPremium = true on user record
-      │               ✗ → Error message shown
-      │
-      └─ Dashboard crown badge appears for premium users
-```
-
----
-
-## 2. Sequence Diagrams
-
-### 2.1 Login Sequence
-
-```
-Browser          Express          Replit OIDC       PostgreSQL
-   │                │                  │                │
-   │──GET /api/login──►│                │                │
-   │                │──discover OIDC──►│                │
-   │                │◄──OIDC config────│                │
-   │◄──302 redirect─│                  │                │
-   │──────────────────────────────────►│                │
-   │◄──auth code──────────────────────│                │
-   │──GET /callback?code=xxx──►│       │                │
-   │                │──exchange code──►│                │
-   │                │◄──ID token+claims│                │
-   │                │──upsertUser()───────────────────►│
-   │                │◄──User record──────────────────── │
-   │                │──create session─────────────────►│
-   │◄──302 /dashboard│                 │                │
-   │──Set-Cookie: session──►           │                │
-```
-
-### 2.2 Game Completion Sequence
-
-```
-Browser              TanStack Query       Express         PostgreSQL
-   │                      │                 │                │
-   │──completes game──►   │                 │                │
-   │──onGameComplete()──► │                 │                │
-   │                      │                 │                │
-   │──POST /api/game-sessions──────────────►│                │
-   │                      │                 │──INSERT game_sessions──►│
-   │                      │                 │◄──session record────────│
-   │                      │                 │──UPSERT user_progress──►│
-   │                      │◄──200 session───│◄──progress record──────│
-   │                      │                 │                │
-   │◄──toast "Game Saved!"│                 │                │
-   │                      │                 │                │
-   │──invalidateQueries──►│                 │                │
-   │   [/api/stats]       │──GET /api/stats─────────────────►│
-   │   [/api/stats/weekly]│──GET /api/stats/weekly──────────►│
-   │   [/api/stats/today] │──GET /api/stats/today───────────►│
-   │   [/api/game-sessions│──GET /api/game-sessions─────────►│
-   │                      │◄──updated data──────────────────│
-   │◄──re-render with     │                 │                │
-   │   updated stats      │                 │                │
-```
-
-### 2.3 Adaptive Difficulty Fetch Sequence
-
-```
-Game Component       TanStack Query       Express         PostgreSQL
-      │                    │                 │                │
-      │──useQuery[/api/difficulty/memory]──► │                │
-      │                    │──GET /api/difficulty/memory──────►│
-      │                    │                 │                │
-      │                    │                 │──SELECT last 10 sessions───►│
-      │                    │                 │◄──sessions data─────────── │
-      │                    │                 │                │
-      │                    │                 │ calculateMetrics:           │
-      │                    │                 │  avgAccuracy = 0.82         │
-      │                    │                 │  streak = 4                 │
-      │                    │                 │                │
-      │                    │                 │ DifficultyCalculator        │
-      │                    │                 │  .calculateMemoryDifficulty │
-      │                    │                 │  → { cardPairs: 7,          │
-      │                    │                 │      previewTime: 2.5 }     │
-      │                    │◄──{ cardPairs:7, previewTime:2.5 }─────────── │
-      │◄──difficulty data──│                 │                │
-      │                    │                 │                │
-      │ initialize game with 7 card pairs   │                │
-      │ and 2.5s preview time               │                │
-```
-
----
-
-## 3. State Machine — Game Lifecycle
-
-```
-         ┌─────────────────────────────────────────┐
-         │            GAME LIFECYCLE               │
-         └─────────────────────────────────────────┘
-
-                     ┌──────────┐
-              ┌──────│  IDLE    │◄──────────────────┐
-              │      └──────────┘                   │
-              │           │ User clicks Play         │
-              │           ▼                         │
-              │      ┌──────────┐                   │
-              │      │ LOADING  │ (fetching diff.)  │
-              │      └──────────┘                   │
-              │           │ difficulty received      │
-              │           ▼                         │
-              │      ┌──────────┐                   │
-              │      │  START   │ (pre-game screen) │
-              │      └──────────┘                   │
-              │           │ Click "Start Game"       │
-              │           ▼                         │
-              │      ┌──────────┐                   │
-              │      │  ACTIVE  │◄──────────────────┤
-              │      └──────────┘   "Play Again"    │
-              │           │ all rounds/matches done │
-              │           │ or time out             │
-              │           ▼                         │
-              │      ┌──────────┐                   │
-              │      │ COMPLETE │──────────────────►│
-              │      └──────────┘   "Play Again"    │
-              │           │ "Save & Continue"        │
-              │           ▼                         │
-              └─────►┌──────────┐                  │
-            "✕" btn  │  CLOSED  │ (back to dash)   │
-                     └──────────┘                  │
-                          ▲                        │
-                          └── any "Back to Dash" ──┘
-```
-
----
-
-## 4. Navigation Map
-
-```
-/  (Landing Page)
-├── Scroll sections:
-│   ├── #hero
-│   ├── #features
-│   ├── (social proof + animated counters)
-│   ├── (brain visualization)
-│   ├── #science
-│   ├── (testimonials)
-│   └── #pricing
-│
-├── → /api/login (auth redirect)
-│         └── → / (post-login, redirected to /dashboard if authenticated)
-│
-/dashboard  [AUTH REQUIRED]
-├── Stat cards (streak, score, level, time)
-├── Today's Training (4 game cards)
-│   ├── Memory Game (inline)
-│   ├── Logic Puzzle (inline)
-│   ├── Attention Game (inline)
-│   └── Speed Math (inline)
-├── Recent Sessions (last 8)
-└── Sidebar:
-    ├── Performance Trend chart
-    └── Today's Plan with completion tracking
-
-/subscribe  [AUTH REQUIRED]
-└── Stripe payment form
-
-/api/logout → / (redirect)
-/* → 404 Not Found page
-```
-
----
-
-## 5. Data Model Relationships
-
-```
-┌──────────┐        ┌────────────────┐        ┌───────────────┐
-│  users   │──1:N──►│  game_sessions │        │ training_plans│
-│          │        │                │        │               │
-│ id (PK)  │        │ user_id (FK)   │        │ user_id (FK)  │
-│ email    │        │ game_type      │        │ games (JSONB) │
-│ is_prem  │        │ score          │        │ is_active     │
-│ stripe_* │        │ accuracy       │        └───────────────┘
-└──────────┘        │ difficulty_... │
-     │              │  settings(JSON)│
-     │              └────────────────┘
+User visits /
      │
-     └──1:N──►┌───────────────┐
-              │ user_progress │
-              │               │
-              │ user_id (FK)  │
-              │ game_type     │◄── UNIQUE(user_id, game_type)
-              │ current_level │
-              │ total_score   │
-              │ streak        │
-              └───────────────┘
-              
-     └──1:1──►┌──────────┐
-              │ sessions │  (Express session store)
-              │ sid (PK) │
-              │ sess(JSON│
-              │ expire   │
-              └──────────┘
+     ├─ isLoading=true ──────────────────────→ Show loading spinner on Landing
+     │
+     ├─ isAuthenticated=false ───────────────→ Show Landing page
+     │        │
+     │        └─ clicks "Sign In" or "Get Started"
+     │                 │
+     │                 ▼
+     │           window.location = "/api/login"
+     │                 │
+     │                 ▼
+     │        GET /api/login
+     │        passport.authenticate("replitauth:<hostname>")
+     │                 │
+     │                 ▼
+     │        Redirect to https://replit.com/oidc/authorize
+     │                 │
+     │           user approves
+     │                 │
+     │                 ▼
+     │        GET /api/callback
+     │        passport validates token
+     │        upsertUser(claims) → DB
+     │        session created in PostgreSQL
+     │                 │
+     │                 ▼
+     │        successReturnToOrRedirect: "/"
+     │                 │
+     │                 ▼
+     └─ isAuthenticated=true ────────────────→ Show Dashboard
+```
+
+---
+
+## 2. Dashboard Load Sequence
+
+```
+Dashboard mounts
+    │
+    ├── useAuth → GET /api/auth/user
+    ├── GET /api/stats
+    ├── GET /api/stats/weekly
+    ├── GET /api/stats/today
+    └── GET /api/game-sessions
+
+(all 5 queries fire in parallel via TanStack Query)
+
+    │
+    ├── Stats loading → skeleton shimmer in StatCards
+    ├── Weekly loading → skeleton in ProgressChart
+    └── Sessions loading → nothing shown until ready
+
+    ▼
+All data arrives → Dashboard renders:
+  - StatCards: streak, totalScore, level, trainingTime
+  - Today's Training: 4 game cards with ✓ on completed games
+  - ProgressChart: per-game improvement %
+  - Today's Plan: 4 items, strikethrough completed ones, progress bar
+  - Recent Sessions: last 8 sessions with time-ago + accuracy
+```
+
+---
+
+## 3. Game Session Flow (all 4 games)
+
+```
+User clicks "Play Now" on any GameCard
+    │
+    ▼
+setActiveGame(gameType) → Dashboard renders game component fullscreen
+    │
+    ▼
+Game mounts → GET /api/difficulty/:gameType
+    │
+    ├── Loading: spinner shown
+    │
+    ▼
+Settings received → game initialised with adaptive parameters
+    │
+    ▼
+User plays game
+    │
+    ▼ (game over condition)
+    │
+    ├── Memory: matchedPairs === cardPairs (all pairs found)
+    ├── Logic:  currentRound > totalRounds (last puzzle finished)
+    ├── Attention: timeLeft === 0 OR lives === 0
+    └── Speed Math: questionIndex >= totalQuestions (all questions answered)
+    │
+    ▼
+onGameComplete(score, ...metrics, difficultySettings) called ONCE
+    │
+    ▼
+setActiveGame(null) → returns to dashboard view
+    │
+    ▼
+Dashboard.handleGameComplete() builds sessionData:
+  - gameType, score, difficulty: 'adaptive'
+  - duration (actual elapsed seconds)
+  - accuracy, correctAnswers, totalAttempts, moves, difficultySettings
+    │
+    ▼
+useMutation → POST /api/game-sessions
+    │
+    ├── onSuccess →
+    │     toast: "Game Saved!"
+    │     invalidateQueries: [stats, stats/weekly, stats/today, game-sessions]
+    │     → all stat cards + progress chart refresh
+    │
+    └── onError →
+          if 401 → redirect to /api/login
+          else   → toast error
+```
+
+---
+
+## 4. Adaptive Difficulty Loop
+
+```
+Session N complete
+    │
+    ▼
+POST /api/game-sessions saves:
+  - accuracy, duration, correctAnswers, difficultySettings
+    │
+    ▼
+upsertUserProgress:
+  - currentLevel derived from accuracy
+  - totalScore accumulated (SQL +=)
+    │
+    ▼
+User starts Session N+1
+    │
+    ▼
+GET /api/difficulty/:gameType
+    │
+    ▼
+getUserPerformanceMetrics():
+  SELECT last 10 sessions for (user, gameType)
+  → avgAccuracy (0–1), avgTime, streak (consecutive ≥70%), recentGames
+    │
+    ▼
+DifficultyCalculator.calculateDifficulty(gameType, metrics):
+  Applies thresholds → returns new settings
+    │
+    ▼
+Game receives harder/easier settings → loop continues
+```
+
+---
+
+## 5. Stripe Subscription Flow
+
+```
+User clicks "Upgrade to Premium"
+    │
+    ▼
+setLocation("/subscribe")
+    │
+    ▼
+Subscribe page mounts
+    │
+    ├── stripePromise = loadStripe(VITE_STRIPE_PUBLIC_KEY)
+    │
+    ▼
+useEffect → POST /api/create-subscription
+    │
+    ├── User has existing subscription?
+    │     YES → retrieve + return existing clientSecret
+    │     NO  → create Stripe Customer
+    │           create Stripe Subscription (payment_behavior: default_incomplete)
+    │           updateUserStripeInfo() → stores customerId + subscriptionId
+    │           return new clientSecret
+    │
+    ▼
+clientSecret received → <Elements stripe={stripePromise} options={{clientSecret}}>
+    │
+    ▼
+<PaymentElement> renders Stripe's card input
+    │
+    ▼
+User enters card details + clicks "Subscribe"
+    │
+    ▼
+stripe.confirmPayment({
+  elements,
+  confirmParams: { return_url: window.location.origin }
+})
+    │
+    ├── Payment success → Stripe redirects to origin "/"
+    │   (user.isPremium is already true from updateUserStripeInfo)
+    │
+    └── Payment failure → toast error message shown
+```
+
+---
+
+## 6. Streak Calculation Flow
+
+```
+GET /api/stats
+    │
+    ▼
+getUserStats(userId):
+    │
+    ├── getUserGameSessions(userId, 200)
+    │     → all sessions ordered newest-first (up to 200)
+    │
+    ▼
+For each session:
+  normalise completedAt to midnight → add to playDaySet (Set<timestamp>)
+    │
+    ▼
+Check: did user play today?
+    │
+    ├── YES → start counting from today
+    └── NO  → start counting from yesterday
+    │
+    ▼
+Walk backwards day by day:
+  while playDaySet.has(currentDay):
+    streak++
+    currentDay -= 1 day
+    │
+    ▼
+Return streak (e.g. 5 = played 5 consecutive days)
+```
+
+---
+
+## 7. Navigation Map
+
+```
+                    ┌─────────────┐
+                    │   Landing   │  (unauthenticated default)
+                    │   (/)       │
+                    └──────┬──────┘
+                           │ Sign In / Get Started
+                           │ → /api/login → OIDC → /api/callback
+                           │
+                    ┌──────▼──────┐
+              ┌────►│  Dashboard  │◄────────────────────────────┐
+              │     │   (/)       │                             │
+              │     └──────┬──────┘                             │
+              │            │                                     │
+              │   ┌────────┼───────────────────┐                │
+              │   │        │                   │                │
+              │   ▼        ▼                   ▼                │
+              │ Memory   Logic              Attention         Speed
+              │  Game    Puzzle              Game              Math
+              │  (modal render inside dashboard layout)         │
+              │   │        │                   │                │
+              └───┴────────┴───────────────────┴────────────────┘
+                              game complete → back to /
+
+                    ┌──────────────┐
+         ┌─────────►│  Subscribe   │  (/subscribe)
+         │          │  (Stripe)    │
+         │          └──────┬───────┘
+         │                 │ payment success
+         │                 └──────────────→ redirect to /
+         │
+    "Upgrade" click from Dashboard
+```
+
+---
+
+## 8. State Machine: Speed Math Timer
+
+```
+       ┌──────────┐
+       │  Idle    │  (game not started)
+       └────┬─────┘
+            │ startGame()
+       ┌────▼─────┐
+       │  Playing  │  timer counts down: timeLeft--
+       └────┬─────┘
+            │
+      ┌─────┤─────────────────────────────┐
+      │                                   │
+      │ user submits answer               │ timeLeft reaches 0
+      ▼                                   ▼
+┌──────────────┐                  ┌────────────────┐
+│  Feedback    │                  │  Timeout Feed  │
+│  (correct/   │                  │  isTimeout=true│
+│   wrong)     │                  └───────┬────────┘
+└──────┬───────┘                          │
+       │                                  │
+       └──────────────┬───────────────────┘
+                      │ 600ms delay
+                 ┌────▼────┐
+                 │ next Q? │
+                 └────┬────┘
+          ┌──────────┘└──────────────┐
+          │ more questions            │ last question
+          ▼                           ▼
+    ┌──────────┐                ┌──────────┐
+    │  Playing  │               │ endGame()│
+    └──────────┘                │→ onGameComplete()
+                                │→ setGameOver(true)
+                                └──────────┘
 ```

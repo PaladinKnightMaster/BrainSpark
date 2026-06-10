@@ -12,21 +12,23 @@ interface GameCardProps {
 }
 
 const difficultyConfig = {
-  easy: { stars: 2, color: 'text-chart-4', label: 'Easy' },
+  easy: { stars: 2, color: 'text-chart-3', label: 'Easy' },
   medium: { stars: 3, color: 'text-chart-4', label: 'Medium' },
-  hard: { stars: 4, color: 'text-chart-4', label: 'Hard' },
+  hard: { stars: 4, color: 'text-destructive', label: 'Hard' },
 };
 
-const iconColors = {
+const iconColors: Record<string, string> = {
   'fa-puzzle-piece': 'text-primary',
   'fa-brain': 'text-accent',
   'fa-eye': 'text-chart-3',
   'fa-calculator': 'text-chart-5',
+  // FIX: fa-crosshairs was missing — attention game icon was falling back to text-primary
+  'fa-crosshairs': 'text-chart-3',
 };
 
 export function GameCard({ icon, title, description, duration, difficulty, onPlay }: GameCardProps) {
   const config = difficultyConfig[difficulty];
-  const iconColor = iconColors[icon as keyof typeof iconColors] || 'text-primary';
+  const iconColor = iconColors[icon] || 'text-primary';
 
   return (
     <Card className="premium-shadow hover:scale-105 transition-transform cursor-pointer" data-testid={`game-${title.toLowerCase().replace(/\s+/g, '-')}`}>

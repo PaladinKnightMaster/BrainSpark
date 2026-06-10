@@ -1,95 +1,122 @@
 # BrainBoost — Tech Stack Reference
 
-**Last Updated:** March 2026
+**Last Updated:** June 2026
 
 ---
 
 ## Frontend
 
-| Category | Technology | Version | Rationale |
-|----------|-----------|---------|-----------|
-| UI Framework | React | 18.x | Component model, rich ecosystem, hooks API |
-| Language | TypeScript | 5.x | Type safety across full stack |
-| Build Tool | Vite | 5.x | Instant HMR, fast production builds via esbuild |
-| Routing | Wouter | 3.x | Lightweight (1.5KB), hook-based, no config |
-| Server State | TanStack Query | 5.x | Query caching, auto-invalidation, loading states |
-| UI Components | Shadcn/ui | latest | Copy-paste Radix primitives, fully customizable |
-| Primitives | Radix UI | latest | Accessible, unstyled component primitives |
-| Styling | Tailwind CSS | 3.x | Utility-first, JIT, dark mode via CSS variables |
-| Icons | Lucide React | latest | Tree-shakeable SVG icons |
-| Icons (brands) | Font Awesome 6 | CDN | Brain, game, and UI icons |
-| Fonts | Inter (Google Fonts) | — | Humanist sans-serif, excellent readability |
-| Forms | react-hook-form | 7.x | Performant, controlled forms (via Shadcn) |
-| Payment UI | @stripe/react-stripe-js | latest | PCI-compliant card Elements |
+| Library | Version | Role | Notes |
+|---------|---------|------|-------|
+| React | 18 | UI framework | Concurrent features, automatic batching |
+| TypeScript | 5.x | Type safety | Strict mode enabled |
+| Vite | 5.x | Build tool + dev server | HMR, path aliases (`@/`, `@shared/`, `@assets/`) |
+| Wouter | 2.x | Client routing | 2.7KB; `<Switch>`, `<Route>`, `useLocation` |
+| TanStack Query | 5.x | Server state | `useQuery`, `useMutation`; v5 object-form API only |
+| Tailwind CSS | 3.x | Utility CSS | `darkMode: ["class"]` |
+| Shadcn/ui | latest | Component library | Radix UI primitives + Tailwind |
+| Radix UI | various | Headless primitives | Used by Shadcn |
+| Lucide React | latest | Icons | Tree-shakeable SVG icons |
+| Font Awesome | 6 (CDN) | Legacy icons | `fas fa-*` classes via CDN link in HTML |
+| @stripe/react-stripe-js | latest | Stripe Elements | `<Elements>`, `<PaymentElement>`, `useStripe` |
+| @stripe/stripe-js | latest | Stripe.js loader | `loadStripe()` |
+
+### Key Frontend Conventions
+- **No explicit React import** — Vite JSX transform handles it
+- **Path aliases:** `@/` → `client/src/`, `@shared/` → `shared/`, `@assets/` → `attached_assets/`
+- **Env vars:** `import.meta.env.VITE_*` (never `process.env.*`)
+- **Forms:** `react-hook-form` + `zodResolver` + Shadcn `<Form>` components
+- **Toasts:** `useToast` from `@/hooks/use-toast` (not from Shadcn directly)
 
 ---
 
 ## Backend
 
-| Category | Technology | Version | Rationale |
-|----------|-----------|---------|-----------|
-| Runtime | Node.js | 20.x | V8 engine, native ESM, modern APIs |
-| Framework | Express.js | 4.x | Minimal, mature, vast middleware ecosystem |
-| Language | TypeScript (tsx) | 5.x | Type safety, run directly via tsx in dev |
-| Authentication | Passport.js | 0.7.x | OIDC strategy, session integration |
-| OIDC Client | openid-client | 5.x | RFC-compliant OIDC/OAuth 2.0 client |
-| Session Store | connect-pg-simple | 10.x | PostgreSQL-backed Express sessions |
-| Session | express-session | 1.x | HTTP-only cookie sessions |
-| Memoization | memoizee | 0.4.x | Caches OIDC discovery document |
-| Payment | stripe | 17.x | Subscription creation and management |
-| Validation | Zod | 3.x | Runtime type validation for API input |
+| Library | Version | Role | Notes |
+|---------|---------|------|-------|
+| Node.js | 20+ | Runtime | |
+| Express.js | 4.x | HTTP server + API | `express.json()`, `express.urlencoded()` |
+| tsx | latest | TypeScript runner | Dev mode; production uses compiled JS |
+| Passport.js | 0.7+ | Auth middleware | `passport.initialize()`, `passport.session()` |
+| openid-client | 6.x | OIDC client | `client.discovery()`, `Strategy` from `openid-client/passport` |
+| express-session | 1.x | Session middleware | Signed cookie, PostgreSQL-backed store |
+| connect-pg-simple | 9.x | PG session store | `createTableIfMissing: true` |
+| memoizee | 0.4.x | Function memoisation | Caches OIDC discovery config for 1 hour |
+| Stripe | latest | Payment processing | `apiVersion: "2025-08-27.basil"` |
+| Zod | 3.x | Runtime validation | Used via `drizzle-zod` schemas in routes |
 
 ---
 
-## Database & ORM
+## Shared (client + server)
 
-| Category | Technology | Version | Rationale |
-|----------|-----------|---------|-----------|
-| Database | PostgreSQL 15 | — | ACID compliance, JSONB, UUID support |
-| Hosting | Neon Serverless | — | Auto-scaling, connection pooling, free tier |
-| Driver | @neondatabase/serverless | latest | HTTP-based driver, no persistent connections |
-| ORM | Drizzle ORM | latest | TypeScript-first, lightweight, schema-as-code |
-| Schema + Zod | drizzle-zod | latest | Auto-generates Zod schemas from Drizzle tables |
-| Migrations | drizzle-kit | latest | `npm run db:push` for schema sync |
+| Library | Version | Role | Notes |
+|---------|---------|------|-------|
+| Drizzle ORM | 0.30+ | DB schema + query builder | `drizzle-orm/pg-core` |
+| drizzle-zod | 0.5+ | Schema → Zod generation | `createInsertSchema(table).omit({...})` |
+| @neondatabase/serverless | latest | Neon PG driver | Connection pooling via WebSocket |
+| Zod | 3.x | Schema validation | Shared type definitions |
 
 ---
 
-## Infrastructure
+## Database
 
-| Category | Technology | Rationale |
-|----------|-----------|-----------|
-| Hosting | Replit Deployments | Integrated CI, HTTPS, custom domains |
-| Authentication | Replit OIDC | Platform-native, zero credential management |
-| Port Strategy | Single port 5000 | API + static files on one port; Vite proxies in dev |
-| Env Variables | Replit Secrets | Encrypted at rest, injected at runtime |
-
----
-
-## Development Tooling
-
-| Tool | Purpose |
-|------|---------|
-| tsx | TypeScript execution for Node.js (dev server) |
-| esbuild | Production server bundle (via Vite server build) |
-| Vite | Frontend HMR + production build |
-| drizzle-kit | Database schema push + migrations |
-| TypeScript | Static type checking |
+| Component | Details |
+|-----------|---------|
+| Engine | PostgreSQL 15 (Neon serverless) |
+| Connection | `@neondatabase/serverless` with WebSocket proxy |
+| Schema management | `npm run db:push` (drizzle-kit push — applies schema directly, no migration files) |
+| Tables | `sessions`, `users`, `game_sessions`, `user_progress`, `training_plans` |
+| Config | `drizzle.config.ts` (do not modify) |
 
 ---
 
-## Package Structure
+## Infrastructure & DevOps
 
-```
-package.json (root — unified frontend + backend)
-├── dependencies (runtime)
-│   ├── express, passport, drizzle-orm, @neondatabase/serverless
-│   ├── react, react-dom, wouter, @tanstack/react-query
-│   ├── @radix-ui/*, tailwindcss, shadcn components
-│   └── stripe, @stripe/react-stripe-js
-└── devDependencies (build + tooling)
-    ├── vite, @vitejs/plugin-react
-    ├── typescript, tsx, esbuild
-    └── drizzle-kit, drizzle-zod
+| Component | Details |
+|-----------|---------|
+| Hosting | Replit (development) + Replit Deployments (production) |
+| Port | 5000 (only non-firewalled port; `PORT` env var overrides) |
+| Dev server | Express + Vite middleware on same port (no proxy) |
+| Production server | Express serves compiled `dist/public/` static files |
+| Session store | PostgreSQL `sessions` table (`createTableIfMissing: true`) |
+| Secret management | Replit environment secrets (never in `.env` files) |
+
+---
+
+## Environment Variables
+
+| Variable | Required | Frontend/Backend | Description |
+|----------|----------|-----------------|-------------|
+| `DATABASE_URL` | ✅ | Backend | Neon connection string with pooling |
+| `PGHOST` | ✅ | Backend | PostgreSQL host (alternative to DATABASE_URL) |
+| `PGPORT` | ✅ | Backend | PostgreSQL port |
+| `PGUSER` | ✅ | Backend | PostgreSQL username |
+| `PGPASSWORD` | ✅ | Backend | PostgreSQL password |
+| `PGDATABASE` | ✅ | Backend | Database name |
+| `SESSION_SECRET` | ✅ | Backend | Express session signing key (random, keep secret) |
+| `REPLIT_DOMAINS` | Auto | Backend | Set by Replit runtime; used for OIDC callback URL |
+| `REPL_ID` | Auto | Backend | Set by Replit runtime; used as OIDC client_id |
+| `ISSUER_URL` | Optional | Backend | OIDC issuer; defaults to `https://replit.com/oidc` |
+| `STRIPE_SECRET_KEY` | Optional | Backend | Stripe secret key; payment routes disabled if absent |
+| `VITE_STRIPE_PUBLIC_KEY` | Optional | Frontend | Stripe publishable key; payment UI disabled if absent |
+| `STRIPE_PRICE_ID` | ⚠️ Required for live | Backend | Real Stripe price ID; **no valid fallback** |
+
+---
+
+## Build Commands
+
+```bash
+# Development (starts Express + Vite HMR on port 5000)
+npm run dev
+
+# Push schema changes to database
+npm run db:push
+
+# Production build (compiles React to dist/public/)
+npm run build
+
+# Start production server
+npm start
 ```
 
 ---
@@ -97,36 +124,20 @@ package.json (root — unified frontend + backend)
 ## Browser Support
 
 | Browser | Min Version | Notes |
-|---------|------------|-------|
-| Chrome | 90+ | Primary target |
-| Firefox | 90+ | Fully supported |
-| Safari | 15+ | Webkit CSS, tested |
-| Edge | 90+ | Chromium-based |
-| Mobile Chrome/Safari | iOS 15+, Android 10+ | Responsive layout tested at 375px |
+|---------|-------------|-------|
+| Chrome / Edge | 90+ | Primary target |
+| Firefox | 88+ | Full support |
+| Safari | 14+ | CSS grid + animations tested |
+| Mobile Safari | iOS 14+ | Touch events on game canvases |
+| Mobile Chrome | Android 90+ | Responsive layout tested at 375px |
 
 ---
 
-## Environment Variables
+## Key Technical Constraints
 
-| Variable | Required | Source | Purpose |
-|----------|----------|--------|---------|
-| `DATABASE_URL` | Yes | Replit DB integration | Neon PostgreSQL connection string |
-| `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` | Yes | Replit DB integration | Individual PG connection params |
-| `SESSION_SECRET` | Yes | Replit Secret | Express session signing key |
-| `REPL_ID` | Auto | Replit | OIDC client configuration |
-| `REPLIT_DOMAINS` | Auto | Replit | Allowed redirect URLs |
-| `STRIPE_SECRET_KEY` | Optional | Replit Secret | Stripe API key (premium disabled if absent) |
-| `STRIPE_PRICE_ID` | Optional | Replit Secret | Stripe subscription price ID |
-| `VITE_STRIPE_PUBLIC_KEY` | Optional | Replit Secret | Stripe publishable key (frontend) |
-
----
-
-## Third-Party Services
-
-| Service | Account Required | Cost | Purpose |
-|---------|-----------------|------|---------|
-| Neon | Yes | Free tier (1GB) | PostgreSQL database hosting |
-| Replit | Yes | Free (basic) | Hosting, auth, deployment |
-| Stripe | Yes | 2.9% + 30¢/txn | Payment processing |
-| Google Fonts | No | Free | Inter typeface |
-| Font Awesome | No | Free (CDN) | Icons |
+1. **Do not modify** `server/vite.ts`, `vite.config.ts`, `package.json`, `drizzle.config.ts`
+2. **All path aliases** are defined in `vite.config.ts` — do not re-define
+3. **No static imports / require()** — use `await import(...)` in Node ESM contexts if dynamic loading is needed
+4. **TanStack Query v5** uses object form only: `useQuery({ queryKey: [...] })` not `useQuery([...])` 
+5. **SelectItem** requires a `value` prop — omitting it throws a Radix error
+6. **useToast** must be imported from `@/hooks/use-toast` not from Shadcn's toast directly

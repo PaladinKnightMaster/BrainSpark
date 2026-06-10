@@ -1,31 +1,25 @@
 # BrainBoost Documentation Hub
 
-**Version:** 1.0.0  
+**Version:** 1.0.1  
 **Product:** BrainBoost — Cognitive Training Platform  
-**Date:** March 2026
+**Date:** June 2026
 
----
-
-## Overview
-
-BrainBoost is a web-based cognitive training platform with four adaptive brain games, real-time progress tracking, personalized daily training plans, and a premium subscription tier.
-
-Built as a TypeScript full-stack monolith: React SPA frontend + Express.js REST API + PostgreSQL database.
+> These docs are the single source of truth for the BrainBoost codebase. Every doc reflects the actual implemented code — not aspirational or planned state.
 
 ---
 
 ## Documentation Index
 
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System components, data flows, deployment | Engineers, Tech Leads |
-| [ADR.md](./ADR.md) | Architecture Decision Records (8 decisions) | Engineers, Architects |
-| [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md) | Design patterns, adaptive difficulty, security | Engineers |
-| [API.md](./API.md) | Complete REST API reference with examples | Frontend Devs, Integrators |
-| [TECH_STACK.md](./TECH_STACK.md) | All technologies, versions, and rationale | Engineers, DevOps |
-| [FLOW.md](./FLOW.md) | User flows, sequence diagrams, state machines | Product, Engineers |
-| [UI_UX.md](./UI_UX.md) | Design system, animations, gamification UX | Designers, Frontend Devs |
-| [STATUS.md](./STATUS.md) | Current status, roadmap, launch checklist | Product, Stakeholders |
+| Document | What it covers | For whom |
+|----------|----------------|----------|
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | System diagram, monorepo layout, data model, request lifecycle, deployment | Engineers, Tech Leads |
+| [API.md](./API.md) | Every REST endpoint — request shape, response shape, error codes, algorithm notes | Frontend Devs, Integrators |
+| [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md) | Design patterns (Repository, Strategy, Upsert), adaptive algorithm tables, security, performance, known debt | Engineers, Architects |
+| [ADR.md](./ADR.md) | 8 Architecture Decision Records — every major technology choice with rationale and trade-offs | Engineers, anyone asking "why X" |
+| [TECH_STACK.md](./TECH_STACK.md) | All libraries, versions, purpose, env vars, conventions, constraints | New contributors, DevOps |
+| [FLOW.md](./FLOW.md) | User flows, sequence diagrams (auth, game save, difficulty loop, streak calc), state machines | Product, Engineers |
+| [UI_UX.md](./UI_UX.md) | Design system (colors, typography, shadows), animations, gamification UX, responsive layout | Designers, Frontend Devs |
+| [STATUS.md](./STATUS.md) | Current feature status, all 12 fixed bugs, known limitations, roadmap, launch checklist | Product, Stakeholders |
 
 ---
 
@@ -33,53 +27,51 @@ Built as a TypeScript full-stack monolith: React SPA frontend + Express.js REST 
 
 ```
 Browser (React SPA)
-    │ HTTPS
+    │ HTTPS / session cookie
     ▼
-Express.js API + Vite Static (Port 5000)
-    │
-    ├── Replit OIDC (Authentication)
-    ├── Neon PostgreSQL (Data)
-    └── Stripe API (Payments)
+Express.js server (port 5000)
+    ├── Passport.js + openid-client  ←→  Replit OIDC
+    ├── Drizzle ORM + Neon driver    ←→  PostgreSQL
+    ├── Stripe SDK                   ←→  Stripe API
+    └── Vite static files (prod) / Vite HMR (dev)
 ```
 
-**Core pattern:**  
-User plays game → game saves session via POST /api/game-sessions → server updates progress → UI auto-refreshes via query invalidation → difficulty adapts for next session.
+**Core game loop:**
+```
+User plays game
+  → onGameComplete(score, metrics, settings)
+  → POST /api/game-sessions
+  → INSERT game_sessions + UPSERT user_progress (score accumulates)
+  → invalidateQueries → Dashboard re-fetches stats
+  → Next game: GET /api/difficulty/:type → uses new session in calculation
+```
 
 ---
 
-## Key Design Decisions
+## Key Design Decisions (summary)
 
 | Decision | Choice | Why |
 |----------|--------|-----|
-| Architecture | Monolith | Speed, cost, small team |
-| Database | PostgreSQL (Neon) | JSONB flexibility + relational integrity |
+| Architecture | Monolith | Speed, cost, 3 routes don't need microservices |
+| Database | PostgreSQL (Neon) | FK integrity + JSONB flexibility + session store |
 | Auth | Replit OIDC | Zero credential management |
-| ORM | Drizzle | TypeScript-first, lightweight |
-| Client state | TanStack Query | Auto-caching + invalidation |
-| Difficulty | Server-side calculation | Uses historical DB data, cheat-proof |
+| ORM | Drizzle | TypeScript-first, `drizzle-zod` for free validation |
+| Client state | TanStack Query v5 | Auto-caching, `invalidateQueries` simplicity |
+| Routing | Wouter | 2.7KB vs React Router's 50KB; 3 routes |
+| Difficulty | Server-side | Uses DB history, cheat-proof, deployable without frontend changes |
+| Game layout | Inline in Dashboard | No route change = no cache miss on return |
 
-> Full rationale: see [ADR.md](./ADR.md)
-
----
-
-## Game Summary
-
-| Game | Cognitive Target | Adaptive Parameters |
-|------|-----------------|-------------------|
-| Memory Card | Visual memory, pattern recognition | Card pairs (4–12), preview time (1–5s) |
-| Logic Puzzle | Sequential reasoning, pattern completion | Sequence length, complexity, rounds |
-| Attention Game | Sustained attention, target discrimination | Spawn rate, target ratio, game speed |
-| Speed Math | Processing speed, working memory | Time limit, number range, operations |
+> Full rationale: [ADR.md](./ADR.md)
 
 ---
 
 ## Running the Project
 
 ```bash
-# Development (auto-starts on Replit)
-npm run dev
+# Development
+npm run dev          # Express + Vite on port 5000
 
-# Database schema sync
+# Apply schema changes to DB
 npm run db:push
 
 # Production build
@@ -87,30 +79,28 @@ npm run build
 npm start
 ```
 
-**Environment variables required:**
-- `DATABASE_URL` — Neon PostgreSQL connection string
-- `SESSION_SECRET` — Express session signing key
-- `STRIPE_SECRET_KEY` — Stripe API key (optional; disables payments if absent)
-- `VITE_STRIPE_PUBLIC_KEY` — Stripe publishable key (optional)
+**Minimum env vars needed:**
+```
+DATABASE_URL=postgres://...
+SESSION_SECRET=<random 32+ char string>
+```
+
+Stripe payments are optional — routes disabled if `STRIPE_SECRET_KEY` absent.
 
 ---
 
-## Project Structure
+## Project Structure (key files)
 
 ```
-brainboost/
-├── client/src/           # React frontend
-│   ├── pages/            # Landing, Dashboard, Subscribe
-│   ├── components/games/ # 4 game components
-│   ├── components/ui/    # Shadcn component library
-│   └── hooks/            # useAuth, use-toast
-├── server/               # Express backend
-│   ├── routes.ts         # All API endpoints
-│   ├── storage.ts        # Database access layer
-│   └── replitAuth.ts     # Passport OIDC setup
-├── shared/               # Shared TypeScript
-│   ├── schema.ts         # Drizzle tables + Zod types
-│   └── difficulty-calculator.ts  # Adaptive algorithm
-├── docs/                 # This documentation
-└── replit.md             # Project overview (always loaded)
+shared/schema.ts                  ← Drizzle tables + Zod types (source of truth)
+shared/difficulty-calculator.ts   ← Pure adaptive algorithm (no DB access)
+server/routes.ts                  ← All 14 API endpoints (thin — delegates to storage)
+server/storage.ts                 ← DatabaseStorage (IStorage implementation)
+server/replitAuth.ts              ← Passport OIDC setup + isAuthenticated middleware
+client/src/pages/dashboard.tsx    ← Main app: stat cards, game launcher, progress
+client/src/pages/landing.tsx      ← Marketing: hero, features, pricing
+client/src/pages/subscribe.tsx    ← Stripe payment flow
+client/src/components/games/      ← 4 game components (all self-contained)
+client/src/hooks/useAuth.ts       ← Auth state via /api/auth/user query
+client/src/lib/queryClient.ts     ← TanStack Query setup + apiRequest helper
 ```

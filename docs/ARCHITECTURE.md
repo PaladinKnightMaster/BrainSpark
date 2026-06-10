@@ -1,337 +1,279 @@
 # BrainBoost — Architecture Document
 
 **Version:** 1.0.0  
-**Date:** March 2026  
+**Date:** June 2026  
 **Status:** Production MVP
 
 ---
 
-## 1. Executive Summary
+## 1. System Overview
 
-BrainBoost is a full-stack cognitive training web application built as a monolithic server-rendered application with a React SPA frontend and an Express.js REST API backend. It provides four adaptive brain games (Memory, Logic, Attention, Speed Math), real-time progress tracking, personalized training plans, and a Stripe-powered premium subscription tier.
-
-The architecture is intentionally simple — a single Node.js process serving both the API and static frontend assets — optimized for fast iteration, low operational overhead, and easy deployment on Replit's hosting infrastructure.
-
----
-
-## 2. System Context Diagram
+BrainBoost is a full-stack cognitive training web application. It runs as a single deployable unit: an Express.js server that serves both the REST API and the compiled React SPA from the same port.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                        External Users                    │
-└────────────────────────┬────────────────────────────────┘
-                         │ HTTPS
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│                BrainBoost Application                    │
-│                                                          │
-│  ┌─────────────────┐    ┌──────────────────────────┐    │
-│  │  Vite Frontend  │    │  Express.js REST API      │    │
-│  │  (React SPA)    │◄───┤  /api/* routes            │    │
-│  │  Port 5000      │    │  Port 5000                │    │
-│  └────────┬────────┘    └──────────┬───────────────┘    │
-│           │                        │                     │
-└───────────┼────────────────────────┼─────────────────────┘
-            │                        │
-            ▼                        ▼
-┌───────────────┐      ┌─────────────────────────────┐
-│ Replit OIDC   │      │ Neon PostgreSQL               │
-│ Auth Provider │      │ Serverless Database           │
-└───────────────┘      └─────────────────────────────┘
-                                    
-                       ┌─────────────────────────────┐
-                       │ Stripe Payment API            │
-                       └─────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  Browser (React SPA)                                            │
+│  - React 18 + TypeScript + Vite                                 │
+│  - TanStack Query (server state)                                │
+│  - Wouter (routing)                                             │
+│  - Shadcn/ui + Tailwind CSS                                     │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │ HTTPS / HTTP-only session cookie
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Express.js Server  (port 5000)                                 │
+│  ├── Passport.js + openid-client  (OIDC auth)                   │
+│  ├── express-session + connect-pg-simple  (session store)       │
+│  ├── REST API routes  (server/routes.ts)                        │
+│  ├── DatabaseStorage  (server/storage.ts)                       │
+│  └── Vite dev middleware / static file serving                  │
+└──────────────┬──────────────────────────┬───────────────────────┘
+               │                          │
+               ▼                          ▼
+┌──────────────────────┐      ┌───────────────────────┐
+│  Neon PostgreSQL      │      │  External Services    │
+│  (serverless driver)  │      │  ├── Replit OIDC      │
+│  Tables:              │      │  └── Stripe API       │
+│  - sessions           │      └───────────────────────┘
+│  - users              │
+│  - game_sessions      │
+│  - user_progress      │
+│  - training_plans     │
+└──────────────────────┘
 ```
 
 ---
 
-## 3. Component Architecture
-
-### 3.1 Frontend Architecture
+## 2. Monorepo Layout
 
 ```
-client/
-├── src/
-│   ├── App.tsx                    # Root component, routing
-│   ├── main.tsx                   # Entry point, query client setup
-│   ├── index.css                  # Global styles, animations
-│   ├── pages/
-│   │   ├── landing.tsx            # Public marketing page
-│   │   ├── dashboard.tsx          # Authenticated user workspace
-│   │   ├── subscribe.tsx          # Stripe payment page
-│   │   └── not-found.tsx          # 404 page
-│   ├── components/
-│   │   ├── games/
-│   │   │   ├── memory-game.tsx    # Memory card matching game
-│   │   │   ├── logic-puzzle.tsx   # Number sequence game
-│   │   │   ├── attention-game.tsx # Target clicking game
-│   │   │   └── speed-math.tsx     # Arithmetic speed game
-│   │   ├── ui/                    # Shadcn/ui component library
-│   │   ├── game-card.tsx          # Game selection card widget
-│   │   ├── progress-chart.tsx     # Performance trend chart
-│   │   ├── feature-card.tsx       # Landing page feature card
-│   │   ├── theme-provider.tsx     # Dark/light mode context
-│   │   └── theme-toggle.tsx       # Mode switch button
-│   ├── hooks/
-│   │   ├── useAuth.ts             # Authentication state hook
-│   │   └── use-toast.ts           # Toast notification hook
-│   └── lib/
-│       ├── queryClient.ts         # TanStack Query config + apiRequest
-│       └── authUtils.ts           # Auth error helpers
-```
-
-**Key Design Decisions:**
-- **Wouter** instead of React Router — lighter weight, simpler API for this scale
-- **TanStack Query** for all server state — automatic caching, background refetch, loading states
-- **No global state manager** (Redux, Zustand) — server state via TanStack Query + React local state is sufficient
-- **Component colocation** — each game is a self-contained component that fetches its own difficulty settings
-
-### 3.2 Backend Architecture
-
-```
-server/
-├── index.ts         # Server bootstrap, middleware setup
-├── routes.ts        # All API route definitions
-├── storage.ts       # Database access layer (IStorage interface + DatabaseStorage)
-├── db.ts            # Neon/Drizzle connection
-├── replitAuth.ts    # Passport.js OIDC strategy setup
-└── vite.ts          # Vite dev server integration (do not modify)
-```
-
-**Layered Design:**
-```
-HTTP Request
-     │
-     ▼
-Express Middleware (logging, auth session, CORS)
-     │
-     ▼
-Route Handler (routes.ts) — validates input with Zod
-     │
-     ▼
-Storage Interface (storage.ts) — business logic + DB queries
-     │
-     ▼
-Drizzle ORM (db.ts) — type-safe SQL generation
-     │
-     ▼
-Neon PostgreSQL
-```
-
-### 3.3 Shared Code
-
-```
-shared/
-├── schema.ts                # Drizzle table schemas + Zod types
-└── difficulty-calculator.ts # Adaptive difficulty algorithm
-```
-
-The shared directory is compiled for both browser and Node.js, enabling type safety across the full stack without duplication.
-
----
-
-## 4. Data Flow — Game Session
-
-```
-User completes a game
-        │
-        ▼
-Game component calls onGameComplete(score, ...metrics, difficultySettings)
-        │
-        ▼
-Dashboard.handleGameComplete() builds sessionData object
-        │
-        ▼
-POST /api/game-sessions  (gameSessionMutation)
-        │
-        ▼
-Server validates with insertGameSessionSchema (Zod)
-        │
-        ▼
-storage.createGameSession() → writes to game_sessions table
-        │
-        ▼
-Server calculates level from accuracy (≥90%→5, ≥80%→4, ≥70%→3, ≥60%→2, else 1)
-        │
-        ▼
-storage.upsertUserProgress() → updates user_progress table (cumulative score)
-        │
-        ▼
-TanStack Query invalidates: /api/stats, /api/stats/weekly, /api/stats/today, /api/game-sessions
-        │
-        ▼
-Dashboard re-fetches and displays updated stats
+brainboost/
+├── client/                     # React frontend
+│   └── src/
+│       ├── pages/
+│       │   ├── landing.tsx     # Public marketing page
+│       │   ├── dashboard.tsx   # Authenticated main app
+│       │   ├── subscribe.tsx   # Stripe payment page
+│       │   └── not-found.tsx
+│       ├── components/
+│       │   ├── games/
+│       │   │   ├── memory-game.tsx
+│       │   │   ├── logic-puzzle.tsx
+│       │   │   ├── attention-game.tsx
+│       │   │   └── speed-math.tsx
+│       │   ├── ui/             # Shadcn components + gradient-button
+│       │   ├── game-card.tsx
+│       │   ├── progress-chart.tsx
+│       │   ├── feature-card.tsx
+│       │   ├── theme-provider.tsx
+│       │   └── theme-toggle.tsx
+│       ├── hooks/
+│       │   ├── useAuth.ts      # /api/auth/user query
+│       │   └── use-toast.ts
+│       └── lib/
+│           ├── queryClient.ts  # TanStack Query setup + apiRequest
+│           └── authUtils.ts    # isUnauthorizedError
+├── server/
+│   ├── index.ts               # Express app + Vite setup
+│   ├── routes.ts              # All API route handlers
+│   ├── storage.ts             # DatabaseStorage (IStorage impl)
+│   ├── replitAuth.ts          # Passport OIDC strategy + session
+│   └── db.ts                  # Drizzle db client (Neon)
+├── shared/
+│   ├── schema.ts              # Drizzle tables + Zod types (source of truth)
+│   └── difficulty-calculator.ts  # DifficultyCalculator class
+├── docs/                      # This documentation
+└── replit.md                  # Project README + user preferences
 ```
 
 ---
 
-## 5. Data Flow — Adaptive Difficulty
+## 3. Data Model
 
+Defined in `shared/schema.ts` using Drizzle ORM. All IDs are `varchar` UUIDs (`gen_random_uuid()`).
+
+### `sessions`
+Required by `connect-pg-simple` for Replit OIDC session storage.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `sid` | varchar PK | Session ID |
+| `sess` | jsonb | Serialised session data |
+| `expire` | timestamp | Expiry for TTL index |
+
+### `users`
+Created/updated on every successful OIDC login via `upsertUser`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | varchar PK | Replit `sub` claim |
+| `email` | varchar unique | From OIDC claims |
+| `first_name` | varchar | |
+| `last_name` | varchar | |
+| `profile_image_url` | varchar | |
+| `stripe_customer_id` | varchar | Set after first subscription |
+| `stripe_subscription_id` | varchar | Set after first subscription |
+| `is_premium` | boolean | Default `false` |
+| `created_at` / `updated_at` | timestamp | Auto-managed |
+
+### `game_sessions`
+Immutable record per completed game. Referenced for streak, weekly progress, and difficulty calculations.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | varchar PK | |
+| `user_id` | varchar FK → users | |
+| `game_type` | varchar | `memory` \| `logic` \| `attention` \| `speed` |
+| `score` | integer | |
+| `difficulty` | varchar | `adaptive` (default) |
+| `duration` | integer | Seconds |
+| `accuracy` | integer | 0–100 |
+| `moves` | integer | Memory: flip count |
+| `correct_answers` | integer | Logic/attention/speed |
+| `total_attempts` | integer | |
+| `difficulty_settings` | jsonb | Settings used during play |
+| `completed_at` | timestamp | Auto |
+
+### `user_progress`
+One row per (user, game_type). Upserted after every game session.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | varchar PK | |
+| `user_id` | varchar FK → users | |
+| `game_type` | varchar | Unique constraint with user_id |
+| `current_level` | integer | 1–5; overwritten each session |
+| `total_score` | integer | **Accumulated** (SQL adds to existing) |
+| `streak` | integer | Legacy — use `GET /api/stats` for real streak |
+| `last_played_at` | timestamp | |
+| `updated_at` | timestamp | Auto |
+
+> **Unique constraint:** `user_game_type_unique` on `(user_id, game_type)`
+
+### `training_plans`
+One active plan per user, created on first `/api/training-plan` call.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | varchar PK | |
+| `user_id` | varchar FK → users | |
+| `plan_name` | varchar | `"Personalized Training"` |
+| `description` | text | |
+| `games` | jsonb | `[{type, duration, difficulty}]` |
+| `is_active` | boolean | Default `true` |
+| `created_at` | timestamp | Auto |
+
+---
+
+## 4. Request Lifecycle
+
+### Game Session Save (critical path)
 ```
-User opens a game
-        │
-        ▼
-Game component: useQuery(['/api/difficulty/:gameType'])
-        │
-        ▼
+1. User completes game in browser
+2. Game component calls onGameComplete(score, ...metrics, difficultySettings)
+3. Dashboard.handleGameComplete() constructs sessionData object
+4. useMutation calls POST /api/game-sessions
+5. Server validates body with Zod insertGameSessionSchema
+6. storage.createGameSession() → INSERT into game_sessions
+7. Derive currentLevel from accuracy
+8. storage.upsertUserProgress() → INSERT or UPDATE user_progress
+   - On INSERT: totalScore = score
+   - On UPDATE: totalScore = existing + score  (SQL accumulation)
+9. Response 200 with saved session
+10. queryClient.invalidateQueries(['/api/stats', '/api/stats/weekly', 
+    '/api/stats/today', '/api/game-sessions'])
+11. Dashboard re-fetches all stats → UI updates
+```
+
+### Authentication Lifecycle
+```
+1. User clicks "Sign In" → window.location.href = "/api/login"
+2. /api/login → passport.authenticate("replitauth:<hostname>")
+3. Browser redirected to https://replit.com/oidc/authorize
+4. User authorises → Replit redirects to /api/callback
+5. Passport verifies token → calls upsertUser() with OIDC claims
+6. Session created in PostgreSQL sessions table
+7. Browser redirected to "/" → React Router sees isAuthenticated=true
+8. Dashboard renders, all queries fire with session cookie
+```
+
+---
+
+## 5. Adaptive Difficulty Flow
+```
+game start request
+      │
+      ▼
 GET /api/difficulty/:gameType
-        │
-        ▼
-storage.getDifficultySettings(userId, gameType)
-        │
-        ▼
-storage.getUserPerformanceMetrics() → queries last 10 game_sessions
-  - calculates avgAccuracy (0–1 scale)
-  - calculates avgTime (seconds)
-  - calculates streak (consecutive sessions ≥70% accuracy)
-  - recentGames count
-        │
-        ▼
+      │
+      ▼
+getUserPerformanceMetrics()
+  - SELECT last 10 sessions for this (user, gameType)
+  - Compute: avgAccuracy (0–1), avgTime (s), streak (consecutive ≥70%), recentGames
+      │
+      ▼
 DifficultyCalculator.calculateDifficulty(gameType, metrics)
-  Memory:    cardPairs (4–12), previewTime (1–5s)
-  Logic:     sequenceLength (3–8), complexityLevel (1–5), totalRounds (5–15)
-  Attention: spawnRate (0.5–3.0/s), targetRatio (0.2–0.4), gameSpeed (0.7–2.0x)
-  Speed:     timePerQuestion (3–12s), maxNumber (5–100), operationTypes, totalQuestions
-        │
-        ▼
-Returns game-specific flat settings object
-        │
-        ▼
-Game initializes with adaptive parameters
+  - Per-game thresholds: if accuracy ≥ 0.9 && streak ≥ 5 → increase params
+  - If accuracy < 0.5 → decrease params
+  - Returns typed settings object
+      │
+      ▼
+Game component receives settings → sets difficulty parameters
+      │
+user plays with these settings
+      │
+      ▼
+POST /api/game-sessions (saves this session's accuracy, duration, etc.)
+      │
+next game start uses updated metrics → loop
 ```
 
 ---
 
-## 6. Database Schema
+## 6. Frontend Architecture
 
-```sql
--- Session storage (Replit Auth requirement)
-CREATE TABLE sessions (
-  sid   VARCHAR PRIMARY KEY,
-  sess  JSONB NOT NULL,
-  expire TIMESTAMP NOT NULL
-);
-
--- Users (populated on first OAuth login)
-CREATE TABLE users (
-  id                    VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-  email                 VARCHAR UNIQUE,
-  first_name            VARCHAR,
-  last_name             VARCHAR,
-  profile_image_url     VARCHAR,
-  stripe_customer_id    VARCHAR,
-  stripe_subscription_id VARCHAR,
-  is_premium            BOOLEAN DEFAULT false,
-  created_at            TIMESTAMP DEFAULT now(),
-  updated_at            TIMESTAMP DEFAULT now()
-);
-
--- Game session record (one per game completion)
-CREATE TABLE game_sessions (
-  id                  VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id             VARCHAR NOT NULL REFERENCES users(id),
-  game_type           VARCHAR NOT NULL,    -- 'memory','logic','attention','speed'
-  score               INTEGER NOT NULL,
-  difficulty          VARCHAR DEFAULT 'adaptive',
-  duration            INTEGER NOT NULL,    -- seconds
-  accuracy            INTEGER,             -- 0–100
-  moves               INTEGER,             -- memory game specific
-  correct_answers     INTEGER,             -- logic/attention/speed
-  total_attempts      INTEGER,
-  difficulty_settings JSONB,              -- snapshot of adaptive settings used
-  completed_at        TIMESTAMP DEFAULT now()
-);
-
--- Per-game progress summary (upserted after each session)
-CREATE TABLE user_progress (
-  id              VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id         VARCHAR NOT NULL REFERENCES users(id),
-  game_type       VARCHAR NOT NULL,
-  current_level   INTEGER DEFAULT 1,
-  total_score     INTEGER DEFAULT 0,      -- cumulative
-  streak          INTEGER DEFAULT 0,
-  last_played_at  TIMESTAMP,
-  updated_at      TIMESTAMP DEFAULT now(),
-  UNIQUE(user_id, game_type)
-);
-
--- Personalized training plan
-CREATE TABLE training_plans (
-  id          VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     VARCHAR NOT NULL REFERENCES users(id),
-  plan_name   VARCHAR NOT NULL,
-  description TEXT,
-  games       JSONB NOT NULL,             -- [{type, duration, difficulty}]
-  is_active   BOOLEAN DEFAULT true,
-  created_at  TIMESTAMP DEFAULT now()
-);
+### Routing (Wouter)
 ```
+isLoading  → Landing (shows spinner on landing page)
+!isAuthenticated → Landing
+isAuthenticated:
+  /         → Dashboard
+  /subscribe → Subscribe
+  *         → NotFound
+```
+
+### State Management
+All server state managed by TanStack Query v5:
+- `staleTime: Infinity` — data never refetches automatically (saves API calls)
+- `refetchOnWindowFocus: false` — no background refetch on tab switch
+- `retry: false` — no retry on error (intentional for auth flows)
+- After every game save: `invalidateQueries` on all related keys → forces fresh fetch
+
+### Query Key Convention
+All queries use full path strings as single-element keys: `['/api/stats']`, `['/api/difficulty/memory']`. The default `queryFn` joins the array with `"/"` to form the fetch URL.
 
 ---
 
-## 7. Authentication Flow
+## 7. Deployment
 
-```
-User clicks "Sign In"
-        │
-        ▼
-Browser navigates to GET /api/login
-        │
-        ▼
-Passport.js redirects to Replit OIDC endpoint
-        │
-        ▼
-User authorizes on Replit
-        │
-        ▼
-Replit redirects to GET /api/login/callback with auth code
-        │
-        ▼
-Passport.js exchanges code for user claims
-        │
-        ▼
-storage.upsertUser(claims) — creates or updates user record
-        │
-        ▼
-Express session created, session cookie set (HTTP-only)
-        │
-        ▼
-Redirect to /dashboard
-        │
-        ▼
-All subsequent API calls include session cookie → isAuthenticated middleware verifies
-```
+**Development:**
+- `npm run dev` → Express server on port 5000 + Vite HMR middleware
+- Both served from same port — no proxy needed
 
----
+**Production (Replit Deployments):**
+- `npm run build` → Vite compiles React to `dist/public/`
+- `npm start` → Express serves static files from `dist/public/` + runs API
+- Same port 5000; `PORT` env var can override
 
-## 8. Deployment Architecture
+**Environment variables required:**
 
-```
-Replit Hosting
-┌──────────────────────────────────────────────────┐
-│  Single Node.js Process (tsx server/index.ts)    │
-│  ┌────────────────────┐  ┌─────────────────────┐ │
-│  │  Vite Dev Server   │  │  Express API Server │ │
-│  │  (frontend HMR)    │  │  (production: static│ │
-│  └────────────────────┘  │   files served by   │ │
-│                           │   Express)          │ │
-│                           └─────────────────────┘ │
-│  Port: 5000 (unified)                            │
-└──────────────────────────────────────────────────┘
-
-External Services:
-- Neon PostgreSQL (serverless, connection pooling built-in)
-- Replit OIDC (auth provider)
-- Stripe API (payment processing)
-```
-
-**Production Build Process:**
-```
-npm run build
-├── esbuild compiles server/index.ts → dist/server.js
-└── vite builds client/ → dist/public/
-    
-npm start → node dist/server.js
-  └── Express serves dist/public/ as static files
-```
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `PGHOST/PORT/USER/PASSWORD/DATABASE` | Individual PG params (alternative) |
+| `SESSION_SECRET` | Express session signing key (must be random + secret) |
+| `REPLIT_DOMAINS` | Comma-separated domains (set automatically by Replit) |
+| `REPL_ID` | Repl identifier for OIDC (set automatically by Replit) |
+| `STRIPE_SECRET_KEY` | Stripe secret key (optional; disables payments if absent) |
+| `VITE_STRIPE_PUBLIC_KEY` | Stripe publishable key (optional; prefix `VITE_` for frontend) |
+| `STRIPE_PRICE_ID` | Stripe price ID for monthly subscription (**required for live payments**) |
