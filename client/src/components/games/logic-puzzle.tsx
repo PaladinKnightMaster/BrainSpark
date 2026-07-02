@@ -20,6 +20,69 @@ interface Puzzle {
 const SHAPES = ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠"];
 const EXTRA_SHAPES = ["⭐", "💎", "🔶", "🔷"];
 
+const LOGIC_BEST_KEY = "brainboost_best_logic";
+
+function LogicAnimatedScore({ target }: { target: number }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    const step = Math.ceil(target / 30);
+    const iv = setInterval(() => {
+      setDisplay(prev => { const n = prev + step; if (n >= target) { clearInterval(iv); return target; } return n; });
+    }, 30);
+    return () => clearInterval(iv);
+  }, [target]);
+  return <span>{display}</span>;
+}
+
+function LogicResultScreen({ correct, total, onPlayAgain, onClose }: {
+  correct: number; total: number; onPlayAgain: () => void; onClose: () => void;
+}) {
+  const accuracy = Math.round((correct / total) * 100);
+  const score = correct * 100;
+  const prev = parseInt(localStorage.getItem(LOGIC_BEST_KEY) || "0", 10);
+  const isNewBest = score > prev;
+  useEffect(() => { if (isNewBest) localStorage.setItem(LOGIC_BEST_KEY, String(score)); }, []);
+  const msg = accuracy >= 90 ? "Perfect reasoning! You're a logic master. 🧠" : accuracy >= 70 ? "Solid logic skills! Keep building on this. 💪" : "Logic is a skill — every puzzle makes you sharper. 🌱";
+
+  return (
+    <div className="text-center space-y-6 py-4">
+      <div className="text-5xl">{accuracy >= 90 ? "🏆" : accuracy >= 70 ? "🧠" : "💪"}</div>
+      <div>
+        <h3 className="text-2xl font-bold text-primary mb-1">Game Complete!</h3>
+        <p className="text-muted-foreground text-sm">{msg}</p>
+      </div>
+      {isNewBest && (
+        <div className="inline-flex items-center gap-2 bg-chart-4/15 text-chart-4 px-4 py-2 rounded-full text-sm font-semibold animate-pulse">
+          ⭐ New Personal Best!
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-primary/10 rounded-xl p-4">
+          <div className="text-2xl font-bold text-primary"><LogicAnimatedScore target={score} /></div>
+          <div className="text-xs text-muted-foreground mt-1">Score</div>
+        </div>
+        <div className="bg-chart-3/10 rounded-xl p-4">
+          <div className="text-2xl font-bold text-chart-3">{correct}/{total}</div>
+          <div className="text-xs text-muted-foreground mt-1">Correct</div>
+        </div>
+        <div className="bg-chart-2/10 rounded-xl p-4">
+          <div className="text-2xl font-bold text-chart-2">{accuracy}%</div>
+          <div className="text-xs text-muted-foreground mt-1">Accuracy</div>
+        </div>
+      </div>
+      {!isNewBest && prev > 0 && <p className="text-xs text-muted-foreground">Personal best: {prev} pts</p>}
+      <div className="flex gap-3 justify-center">
+        <GradientButton onClick={onPlayAgain} data-testid="button-restart-logic">
+          <i className="fas fa-redo mr-2"></i>Play Again
+        </GradientButton>
+        <Button variant="outline" onClick={onClose} data-testid="button-back-dashboard-logic">
+          Back to Dashboard
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function LogicPuzzle({ onGameComplete, onClose }: LogicPuzzleProps) {
   const [currentPuzzle, setCurrentPuzzle] = useState<Puzzle | null>(null);
   const [currentRound, setCurrentRound] = useState(1);
@@ -250,23 +313,12 @@ export function LogicPuzzle({ onGameComplete, onClose }: LogicPuzzleProps) {
       </CardHeader>
       <CardContent>
         {gameComplete ? (
-          <div className="text-center space-y-6">
-            <div className="text-4xl">🧠</div>
-            <h3 className="text-2xl font-bold text-primary">Game Complete!</h3>
-            <div className="space-y-2">
-              <p>Correct answers: <strong>{correctAnswers}/{totalRounds}</strong></p>
-              <p>Accuracy: <strong>{Math.round((correctAnswers / totalRounds) * 100)}%</strong></p>
-            </div>
-            <div className="flex gap-4 justify-center">
-              <GradientButton onClick={restartGame} data-testid="button-restart-logic">
-                <i className="fas fa-redo mr-2"></i>
-                Play Again
-              </GradientButton>
-              <Button variant="outline" onClick={onClose} data-testid="button-back-dashboard-logic">
-                Back to Dashboard
-              </Button>
-            </div>
-          </div>
+          <LogicResultScreen
+            correct={correctAnswers}
+            total={totalRounds}
+            onPlayAgain={restartGame}
+            onClose={onClose}
+          />
         ) : (
           <div className="space-y-6">
             <div className="text-center">

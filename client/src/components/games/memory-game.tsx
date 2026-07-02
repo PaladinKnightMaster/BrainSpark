@@ -18,6 +18,81 @@ interface MemoryGameProps {
 
 const CARD_VALUES = ["🎮", "🧠", "🎯", "⚡", "🔥", "💎", "🚀", "⭐", "🌟", "💫", "🎨", "🎪"];
 
+const MEMORY_BEST_KEY = "brainboost_best_memory";
+
+function getEncouragement(accuracy: number): string {
+  if (accuracy >= 90) return "Incredible memory! You're in the top tier. 🏆";
+  if (accuracy >= 70) return "Great job! Your memory is getting sharper. 💪";
+  return "Keep practicing — every session builds your memory. 🌱";
+}
+
+function AnimatedScore({ target }: { target: number }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    const step = Math.ceil(target / 30);
+    const interval = setInterval(() => {
+      setDisplay(prev => {
+        const next = prev + step;
+        if (next >= target) { clearInterval(interval); return target; }
+        return next;
+      });
+    }, 30);
+    return () => clearInterval(interval);
+  }, [target]);
+  return <span>{display}</span>;
+}
+
+function MemoryResultScreen({ score, moves, time, accuracy, onPlayAgain, onClose }: {
+  score: number; moves: number; time: number; accuracy: number;
+  onPlayAgain: () => void; onClose: () => void;
+}) {
+  const prev = parseInt(localStorage.getItem(MEMORY_BEST_KEY) || "0", 10);
+  const isNewBest = score > prev;
+  useEffect(() => {
+    if (isNewBest) localStorage.setItem(MEMORY_BEST_KEY, String(score));
+  }, []);
+
+  return (
+    <div className="text-center space-y-6 py-4">
+      <div className="text-5xl">{accuracy >= 90 ? "🏆" : accuracy >= 70 ? "🎉" : "💪"}</div>
+      <div>
+        <h3 className="text-2xl font-bold text-primary mb-1">Congratulations!</h3>
+        <p className="text-muted-foreground text-sm">{getEncouragement(accuracy)}</p>
+      </div>
+      {isNewBest && (
+        <div className="inline-flex items-center gap-2 bg-chart-4/15 text-chart-4 px-4 py-2 rounded-full text-sm font-semibold animate-pulse">
+          ⭐ New Personal Best!
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="bg-primary/10 rounded-xl p-4">
+          <div className="text-2xl font-bold text-primary"><AnimatedScore target={score} /></div>
+          <div className="text-xs text-muted-foreground mt-1">Score</div>
+        </div>
+        <div className="bg-chart-3/10 rounded-xl p-4">
+          <div className="text-2xl font-bold text-chart-3">{moves}</div>
+          <div className="text-xs text-muted-foreground mt-1">Moves</div>
+        </div>
+        <div className="bg-chart-2/10 rounded-xl p-4">
+          <div className="text-2xl font-bold text-chart-2">{accuracy}%</div>
+          <div className="text-xs text-muted-foreground mt-1">Accuracy</div>
+        </div>
+      </div>
+      {!isNewBest && prev > 0 && (
+        <p className="text-xs text-muted-foreground">Personal best: {prev} pts</p>
+      )}
+      <div className="flex gap-3 justify-center">
+        <GradientButton onClick={onPlayAgain} data-testid="button-restart-memory">
+          <i className="fas fa-redo mr-2"></i>Play Again
+        </GradientButton>
+        <Button variant="outline" onClick={onClose} data-testid="button-back-dashboard">
+          Back to Dashboard
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [flippedCards, setFlippedCards] = useState<number[]>([]);
@@ -184,24 +259,14 @@ export function MemoryGame({ onGameComplete, onClose }: MemoryGameProps) {
       </CardHeader>
       <CardContent>
         {isGameComplete ? (
-          <div className="text-center space-y-6">
-            <div className="text-4xl">🎉</div>
-            <h3 className="text-2xl font-bold text-primary">Congratulations!</h3>
-            <div className="space-y-2">
-              <p>Game completed in <strong>{moves} moves</strong></p>
-              <p>Time: <strong>{gameTime} seconds</strong></p>
-              <p>Score: <strong>{Math.max(1000 - (moves * 10) - (gameTime * 2), 100)}</strong></p>
-            </div>
-            <div className="flex gap-4 justify-center">
-              <GradientButton onClick={restartGame} data-testid="button-restart-memory">
-                <i className="fas fa-redo mr-2"></i>
-                Play Again
-              </GradientButton>
-              <Button variant="outline" onClick={onClose} data-testid="button-back-dashboard">
-                Back to Dashboard
-              </Button>
-            </div>
-          </div>
+          <MemoryResultScreen
+            score={Math.max(1000 - (moves * 10) - (gameTime * 2), 100)}
+            moves={moves}
+            time={gameTime}
+            accuracy={Math.round((matchedPairs / Math.max(moves, 1)) * 100)}
+            onPlayAgain={restartGame}
+            onClose={onClose}
+          />
         ) : (
           <div className={`grid gap-4 mx-auto ${cardPairs <= 6 ? 'grid-cols-4 max-w-md' : cardPairs <= 8 ? 'grid-cols-4 max-w-lg' : 'grid-cols-6 max-w-2xl'}`}>
             {cards.map((card) => (

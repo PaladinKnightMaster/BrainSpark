@@ -14,6 +14,8 @@ import { LogicPuzzle } from "@/components/games/logic-puzzle";
 import { AttentionGame } from "@/components/games/attention-game";
 import { SpeedMathGame } from "@/components/games/speed-math";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { OnboardingModal, shouldShowOnboarding } from "@/components/onboarding-modal";
+import { Confetti } from "@/components/confetti";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { GameSession } from "@shared/schema";
@@ -118,6 +120,9 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [prevCompletedCount, setPrevCompletedCount] = useState(0);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -164,6 +169,32 @@ export default function Dashboard() {
   });
 
   const todayCompleted = todayData?.completed || [];
+
+  // Onboarding: show for first-time users once stats load
+  useEffect(() => {
+    if (stats && shouldShowOnboarding(stats.sessionsPlayed)) {
+      setShowOnboarding(true);
+    }
+  }, [stats]);
+
+  // Streak milestone toasts
+  useEffect(() => {
+    if (!stats) return;
+    const s = stats.streak;
+    const milestones: Record<number, string> = { 3: "3-day streak! You're building a habit. 🔥", 7: "One week streak! Consistency is key. 🏅", 14: "Two weeks strong! Your brain thanks you. 🧠", 30: "30-day streak! You're a BrainBoost champion. 🏆" };
+    if (milestones[s]) toast({ title: "Streak Milestone!", description: milestones[s] });
+  }, [stats?.streak]);
+
+  // Daily goal confetti when all 4 games completed
+  useEffect(() => {
+    const count = todayData?.completed?.length || 0;
+    if (count === 4 && prevCompletedCount < 4) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 4000);
+      toast({ title: "Daily Goal Complete! 🎉", description: "You finished all 4 games today. Come back tomorrow to keep your streak!" });
+    }
+    setPrevCompletedCount(count);
+  }, [todayData?.completed?.length]);
 
   const gameSessionMutation = useMutation({
     mutationFn: async (gameData: any) => {
@@ -318,6 +349,8 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {showOnboarding && <OnboardingModal onDismiss={() => setShowOnboarding(false)} />}
+      <Confetti active={showConfetti} />
       {/* Navigation */}
       <nav className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

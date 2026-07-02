@@ -18,6 +18,78 @@ interface Question {
   display: string;
 }
 
+const SPEED_BEST_KEY = "brainboost_best_speed";
+
+function SpeedAnimatedScore({ target }: { target: number }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    const step = Math.ceil(target / 30);
+    const iv = setInterval(() => {
+      setDisplay(prev => { const n = prev + step; if (n >= target) { clearInterval(iv); return target; } return n; });
+    }, 30);
+    return () => clearInterval(iv);
+  }, [target]);
+  return <span>{display}</span>;
+}
+
+interface ResultEntry { question: string; correctAnswer: number; userAnswer: string; correct: boolean; }
+
+function SpeedMathResultScreen({ score, correctCount, totalQuestions, results, onPlayAgain, onClose }: {
+  score: number; correctCount: number; totalQuestions: number;
+  results: ResultEntry[]; onPlayAgain: () => void; onClose: () => void;
+}) {
+  const accuracy = Math.round((correctCount / totalQuestions) * 100);
+  const prev = parseInt(localStorage.getItem(SPEED_BEST_KEY) || "0", 10);
+  const isNewBest = score > prev;
+  useEffect(() => { if (isNewBest) localStorage.setItem(SPEED_BEST_KEY, String(score)); }, []);
+  const msg = accuracy >= 90 ? "Lightning fast! Your mental math is elite. ⚡" : accuracy >= 70 ? "Sharp arithmetic! Keep pushing your speed. 💪" : "Every rep makes your math faster. Keep going! 🌱";
+
+  return (
+    <Card className="max-w-lg mx-auto premium-shadow">
+      <CardHeader>
+        <CardTitle className="text-center text-2xl">Speed Math Complete! ⚡</CardTitle>
+      </CardHeader>
+      <CardContent className="text-center space-y-5">
+        <p className="text-muted-foreground text-sm">{msg}</p>
+        {isNewBest && (
+          <div className="inline-flex items-center gap-2 bg-chart-4/15 text-chart-4 px-4 py-2 rounded-full text-sm font-semibold animate-pulse">
+            ⭐ New Personal Best!
+          </div>
+        )}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-primary/10 rounded-xl p-4">
+            <div className="text-3xl font-bold text-primary"><SpeedAnimatedScore target={score} /></div>
+            <div className="text-sm text-muted-foreground">Score</div>
+          </div>
+          <div className="bg-chart-3/10 rounded-xl p-4">
+            <div className="text-3xl font-bold text-chart-3">{correctCount}/{totalQuestions}</div>
+            <div className="text-sm text-muted-foreground">Correct</div>
+          </div>
+          <div className="bg-accent/10 rounded-xl p-4">
+            <div className="text-3xl font-bold text-accent">{accuracy}%</div>
+            <div className="text-sm text-muted-foreground">Accuracy</div>
+          </div>
+        </div>
+        {!isNewBest && prev > 0 && <p className="text-xs text-muted-foreground">Personal best: {prev} pts</p>}
+        <div className="text-left space-y-2 max-h-48 overflow-y-auto">
+          {results.map((r, i) => (
+            <div key={i} className={`flex items-center justify-between text-sm px-3 py-2 rounded-lg ${r.correct ? 'bg-chart-3/10' : 'bg-destructive/10'}`}>
+              <span className="font-mono">{r.question} = {r.correctAnswer}</span>
+              <span className={r.correct ? 'text-chart-3' : 'text-destructive'}>
+                {r.correct ? '✓' : `✗ (you: ${r.userAnswer})`}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={onPlayAgain} className="flex-1">Play Again</Button>
+          <GradientButton onClick={onClose} className="flex-1">Back to Dashboard</GradientButton>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function generateQuestion(maxNumber: number, operations: string[]): Question {
   const op = operations[Math.floor(Math.random() * operations.length)];
   let a = Math.floor(Math.random() * maxNumber) + 1;
@@ -185,48 +257,16 @@ export function SpeedMathGame({ onGameComplete, onClose }: SpeedMathProps) {
     );
   }
 
-  // Game Over Screen — FIX: "Save & Continue" removed; session already saved in endGame.
-  // Both buttons just close/restart.
   if (gameOver) {
-    const accuracy = Math.round((correctCount / totalQuestions) * 100);
     return (
-      <Card className="max-w-lg mx-auto premium-shadow">
-        <CardHeader>
-          <CardTitle className="text-center text-2xl">Speed Math Complete! ⚡</CardTitle>
-        </CardHeader>
-        <CardContent className="text-center space-y-6">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-primary/10 rounded-xl p-4">
-              <div className="text-3xl font-bold text-primary">{score}</div>
-              <div className="text-sm text-muted-foreground">Score</div>
-            </div>
-            <div className="bg-chart-3/10 rounded-xl p-4">
-              <div className="text-3xl font-bold text-chart-3">{correctCount}/{totalQuestions}</div>
-              <div className="text-sm text-muted-foreground">Correct</div>
-            </div>
-            <div className="bg-accent/10 rounded-xl p-4">
-              <div className="text-3xl font-bold text-accent">{accuracy}%</div>
-              <div className="text-sm text-muted-foreground">Accuracy</div>
-            </div>
-          </div>
-
-          <div className="text-left space-y-2 max-h-48 overflow-y-auto">
-            {results.map((r, i) => (
-              <div key={i} className={`flex items-center justify-between text-sm px-3 py-2 rounded-lg ${r.correct ? 'bg-chart-3/10' : 'bg-destructive/10'}`}>
-                <span className="font-mono">{r.question} = {r.correctAnswer}</span>
-                <span className={r.correct ? 'text-chart-3' : 'text-destructive'}>
-                  {r.correct ? '✓' : `✗ (you: ${r.userAnswer})`}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={startGame} className="flex-1">Play Again</Button>
-            <GradientButton onClick={onClose} className="flex-1">Back to Dashboard</GradientButton>
-          </div>
-        </CardContent>
-      </Card>
+      <SpeedMathResultScreen
+        score={score}
+        correctCount={correctCount}
+        totalQuestions={totalQuestions}
+        results={results}
+        onPlayAgain={startGame}
+        onClose={onClose}
+      />
     );
   }
 
