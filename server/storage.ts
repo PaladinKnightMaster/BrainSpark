@@ -203,7 +203,7 @@ export class DatabaseStorage implements IStorage {
     for (const gameType of gameTypes) {
       const typeSessions = allSessions.filter(s => s.gameType === gameType);
       if (typeSessions.length < 2) {
-        result[gameType] = typeSessions.length === 1 ? 5 : 0;
+        result[gameType] = 0;
         continue;
       }
 
