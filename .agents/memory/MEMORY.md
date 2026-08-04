@@ -2,3 +2,5 @@
 - [Streak calculation](streak-calculation.md) — user_progress.streak is a legacy 0/1 column; real consecutive-day streak is computed fresh in getUserStats from game_sessions history
 - [Game completion double-fire](game-completion-guards.md) — all 4 games use a ref guard (gameCompletedRef) to prevent onGameComplete being called twice; stale closure in Attention Game fixed with scoreRef/correctClicksRef/totalClicksRef/levelRef
 - [Logic puzzle options](logic-puzzle-options.md) — buildOptions() uses iterative fallback to always produce exactly 3 choices; sequential progression pattern exhausted SHAPES pool without it
+- [Game pause vs idle state](game-pause-vs-idle.md) — don't reuse the "not started yet" boolean to represent pause; it collides with the start screen and wipes progress
+- [Stripe price ID fallback](stripe-price-fallback.md) — never fall back to a made-up literal price ID string; fail loudly and require a real STRIPE_PRICE_ID env var instead

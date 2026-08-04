@@ -98,6 +98,10 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
   const [correctClicks, setCorrectClicks] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
   const [lastSpawnTime, setLastSpawnTime] = useState(0);
+  // FIX: pause used to set isGameActive=false, which fell through to the start
+  // screen and wiped progress on "Start Game". isPaused now freezes timers/spawns
+  // without leaving the active-game view, and a Resume button restores play.
+  const [isPaused, setIsPaused] = useState(false);
 
   // FIX: refs to prevent double-endGame and read accurate values from async contexts
   const gameCompleteRef = useRef(false);
@@ -157,30 +161,30 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
     onGameComplete(finalScore, accuracy, finalLevel, difficultyData);
   }, [onGameComplete, difficultyData]);
 
-  // Game timer
+  // Game timer (frozen while paused)
   useEffect(() => {
-    if (isGameActive && timeLeft > 0) {
+    if (isGameActive && !isPaused && timeLeft > 0) {
       const timer = setTimeout(() => {
         setTimeLeft(prev => prev - 1);
       }, 1000);
       return () => clearTimeout(timer);
-    } else if (isGameActive && timeLeft === 0) {
+    } else if (isGameActive && !isPaused && timeLeft === 0) {
       endGame();
     }
-  }, [timeLeft, isGameActive, endGame]);
+  }, [timeLeft, isGameActive, isPaused, endGame]);
 
-  // Object spawning
+  // Object spawning (frozen while paused)
   useEffect(() => {
-    if (!isGameActive) return;
+    if (!isGameActive || isPaused) return;
     const interval = setInterval(() => {
       spawnObject();
     }, 100);
     return () => clearInterval(interval);
-  }, [isGameActive, spawnObject]);
+  }, [isGameActive, isPaused, spawnObject]);
 
-  // Object cleanup
+  // Object cleanup (frozen while paused)
   useEffect(() => {
-    if (!isGameActive) return;
+    if (!isGameActive || isPaused) return;
     const interval = setInterval(() => {
       setObjects(prev => prev.filter(obj => {
         const age = Date.now() - obj.id;
@@ -188,9 +192,10 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
       }));
     }, 100);
     return () => clearInterval(interval);
-  }, [isGameActive]);
+  }, [isGameActive, isPaused]);
 
   const handleObjectClick = (obj: GameObject) => {
+    if (isPaused) return;
     // FIX: compute new values locally before calling setters, so endGame receives correct values
     const newTotalClicks = totalClicksRef.current + 1;
     totalClicksRef.current = newTotalClicks;
@@ -228,6 +233,7 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
     totalClicksRef.current = 0;
     levelRef.current = 1;
     setIsGameActive(true);
+    setIsPaused(false);
     setGameComplete(false);
     setScore(0);
     setLevel(1);
@@ -307,21 +313,35 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
             </div>
 
             <div className="relative h-96 bg-muted/30 rounded-lg border-2 border-border overflow-hidden">
-              {objects.map((obj) => (
-                <button
-                  key={obj.id}
-                  onClick={() => handleObjectClick(obj)}
-                  className="absolute w-12 h-12 flex items-center justify-center text-2xl transition-all duration-150 hover:scale-110 animate-pulse"
-                  style={{
-                    left: `${obj.x}%`,
-                    top: `${obj.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                  data-testid={`attention-object-${obj.isTarget ? 'target' : 'distractor'}`}
-                >
-                  {obj.type}
-                </button>
-              ))}
+              {isPaused ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/90 backdrop-blur-sm z-10">
+                  <div className="text-center space-y-4">
+                    <div className="text-4xl">⏸️</div>
+                    <h3 className="text-xl font-bold">Game Paused</h3>
+                    <p className="text-sm text-muted-foreground">Your score and progress are safe.</p>
+                    <GradientButton onClick={() => setIsPaused(false)} data-testid="button-resume-attention">
+                      <i className="fas fa-play mr-2"></i>
+                      Resume
+                    </GradientButton>
+                  </div>
+                </div>
+              ) : (
+                objects.map((obj) => (
+                  <button
+                    key={obj.id}
+                    onClick={() => handleObjectClick(obj)}
+                    className="absolute w-12 h-12 flex items-center justify-center text-2xl transition-all duration-150 hover:scale-110 animate-pulse"
+                    style={{
+                      left: `${obj.x}%`,
+                      top: `${obj.y}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    data-testid={`attention-object-${obj.isTarget ? 'target' : 'distractor'}`}
+                  >
+                    {obj.type}
+                  </button>
+                ))
+              )}
 
               <div className="absolute top-4 left-4 flex items-center gap-2 bg-white/90 dark:bg-black/80 px-3 py-1 rounded-full text-sm font-medium">
                 <span>Target:</span>
@@ -332,11 +352,11 @@ export function AttentionGame({ onGameComplete, onClose }: AttentionGameProps) {
             <div className="text-center mt-4">
               <Button
                 variant="outline"
-                onClick={() => setIsGameActive(false)}
+                onClick={() => setIsPaused(p => !p)}
                 data-testid="button-pause-attention"
               >
-                <i className="fas fa-pause mr-2"></i>
-                Pause
+                <i className={`fas ${isPaused ? 'fa-play' : 'fa-pause'} mr-2`}></i>
+                {isPaused ? 'Resume' : 'Pause'}
               </Button>
             </div>
           </div>

@@ -9,6 +9,9 @@ import { z } from "zod";
 if (!process.env.STRIPE_SECRET_KEY) {
   console.warn('STRIPE_SECRET_KEY not found. Stripe functionality will be disabled.');
 }
+if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_PRICE_ID) {
+  console.warn('STRIPE_PRICE_ID not found. Subscription creation will fail until a valid Stripe Price ID is configured.');
+}
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-08-27.basil",
@@ -214,6 +217,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: 'No user email on file' });
         }
 
+        if (!process.env.STRIPE_PRICE_ID) {
+          return res.status(500).json({ message: "Subscription pricing is not configured. Set STRIPE_PRICE_ID." });
+        }
+
         const customer = await stripe.customers.create({
           email: user.email,
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
@@ -222,7 +229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const subscription = await stripe.subscriptions.create({
           customer: customer.id,
           items: [{
-            price: process.env.STRIPE_PRICE_ID || 'price_premium_monthly',
+            price: process.env.STRIPE_PRICE_ID,
           }],
           payment_behavior: 'default_incomplete',
           expand: ['latest_invoice.payment_intent'],
