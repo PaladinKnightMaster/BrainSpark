@@ -1,7 +1,7 @@
 # BrainBoost — Current Status & Roadmap
 
-**Date:** June 2026  
-**Version:** 1.0.0 MVP  
+**Date:** August 2026  
+**Version:** 1.0.2 MVP  
 **Environment:** Replit (Development + Deployment)
 
 ---
@@ -13,7 +13,7 @@
 | Authentication | ✅ Complete | Replit OIDC, session persistence in PostgreSQL |
 | Memory Card Game | ✅ Complete | Adaptive difficulty, correct double-fire prevention |
 | Logic Puzzle | ✅ Complete | Adaptive difficulty, real elapsed duration tracking, 3 options always |
-| Attention Game | ✅ Complete | Adaptive difficulty, stale-closure fixed, double-endGame guarded |
+| Attention Game | ✅ Complete | Adaptive difficulty, stale-closure fixed, double-endGame guarded, Pause/Resume no longer wipes progress |
 | Speed Math | ✅ Complete | All 4 operations, auto-saves on completion |
 | Adaptive Difficulty | ✅ Complete | All 4 games, server-side calculation from session history |
 | Day Streak | ✅ Complete | Computed from consecutive play days in session history |
@@ -21,7 +21,7 @@
 | Training Plan | ✅ Complete | Dynamic completion tracking |
 | Recent Sessions Log | ✅ Complete | Last 8 sessions with time-ago |
 | Dark/Light/System Mode | ✅ Complete | CSS variables, localStorage, 3-mode toggle |
-| Stripe Integration | ✅ Complete* | *Needs STRIPE_PRICE_ID set in production |
+| Stripe Integration | ✅ Complete* | *Test-mode price configured and working end-to-end; needs a live-mode STRIPE_PRICE_ID before real launch |
 | Landing Page | ✅ Complete | Animated counters, testimonials, scroll-reveal |
 | Responsive Design | ✅ Complete | 375px–1440px tested |
 | E2E Tests | ✅ Passed | Playwright suite, all flows verified |
@@ -33,7 +33,16 @@
 
 ---
 
-## 2. Bug Fix History (v1.0 → v1.0.1)
+## 2. Bug Fix History (v1.0 → v1.0.2)
+
+### v1.0.2 (August 2026) — 2 bugs found and fixed in a follow-up review
+
+| # | Bug | Severity | Fix |
+|---|-----|----------|-----|
+| C13 | Attention Game "Pause" wiped progress | Critical | Pause reused the same flag as "not started," so it fell back to the start screen; resuming there reset score/level/lives and the session was never saved. Added a dedicated `isPaused` state with a Resume button; timers/spawning freeze in place instead of resetting. |
+| C14 | "Upgrade to Premium" always failed | Critical | `/api/create-subscription` fell back to a hardcoded placeholder Stripe price ID (`'price_premium_monthly'`) that didn't exist in the account, so every subscription attempt failed. Created a real Stripe **test-mode** price and set `STRIPE_PRICE_ID`; the route now returns a clear error instead of silently using a fake ID if the variable is ever missing. |
+
+### v1.0 → v1.0.1
 
 All 12 bugs identified in the comprehensive audit have been resolved:
 
@@ -59,7 +68,7 @@ All 12 bugs identified in the comprehensive audit have been resolved:
 | Issue | Impact | Priority |
 |-------|--------|----------|
 | Stripe webhooks not implemented | Subscription renewal/cancellation not handled server-side | Medium |
-| `STRIPE_PRICE_ID` placeholder | Must be set to a real price ID before live payments work | High (pre-launch) |
+| `STRIPE_PRICE_ID` is test-mode only | Full upgrade flow works with Stripe test cards; needs a live-mode price ID swapped in before real payments work | High (pre-launch) |
 | Server timezone for "today" | `getTodayCompletedGames` uses server's local midnight; may differ from user's timezone | Low |
 | No email notifications | No confirmation or weekly summary emails | Low |
 | No password/email auth | Replit-only login; non-Replit users cannot sign up | Low |
@@ -154,8 +163,9 @@ All 12 bugs identified in the comprehensive audit have been resolved:
 - [x] Dark/light/system mode
 - [x] Landing page complete
 - [x] E2E tests passing
-- [ ] **Create `STRIPE_PRICE_ID`** in Stripe dashboard (Products → Prices → copy ID)
-- [ ] **Set `SESSION_SECRET`** to a cryptographically random string (32+ chars)
+- [x] **Create `STRIPE_PRICE_ID`** (test-mode price configured; upgrade flow works end-to-end with test cards)
+- [ ] **Swap `STRIPE_PRICE_ID` for a live-mode price** in Stripe dashboard before accepting real payments
+- [x] **Set `SESSION_SECRET`** to a cryptographically random string (32+ chars)
 - [ ] Review Stripe webhook endpoint (optional for MVP, needed for v1.2)
 - [ ] Point custom domain (optional)
 - [ ] Deploy via Replit Deployments

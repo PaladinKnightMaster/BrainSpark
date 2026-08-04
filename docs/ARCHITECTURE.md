@@ -276,4 +276,4 @@ All queries use full path strings as single-element keys: `['/api/stats']`, `['/
 | `REPL_ID` | Repl identifier for OIDC (set automatically by Replit) |
 | `STRIPE_SECRET_KEY` | Stripe secret key (optional; disables payments if absent) |
 | `VITE_STRIPE_PUBLIC_KEY` | Stripe publishable key (optional; prefix `VITE_` for frontend) |
-| `STRIPE_PRICE_ID` | Stripe price ID for monthly subscription (**required for live payments**) |
+| `STRIPE_PRICE_ID` | Stripe price ID for monthly subscription (test-mode price configured; **swap for a live-mode price ID before launch**) |

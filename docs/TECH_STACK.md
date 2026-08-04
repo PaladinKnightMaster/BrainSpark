@@ -99,7 +99,7 @@
 | `ISSUER_URL` | Optional | Backend | OIDC issuer; defaults to `https://replit.com/oidc` |
 | `STRIPE_SECRET_KEY` | Optional | Backend | Stripe secret key; payment routes disabled if absent |
 | `VITE_STRIPE_PUBLIC_KEY` | Optional | Frontend | Stripe publishable key; payment UI disabled if absent |
-| `STRIPE_PRICE_ID` | ⚠️ Required for live | Backend | Real Stripe price ID; **no valid fallback** |
+| `STRIPE_PRICE_ID` | ✅ Set (test mode) | Backend | Real Stripe test-mode price ID; fails with a clear 500 if unset — **swap for a live-mode price ID before launch** |
 
 ---
 

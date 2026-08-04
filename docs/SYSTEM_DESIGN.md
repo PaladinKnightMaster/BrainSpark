@@ -196,5 +196,5 @@ Plus post-save: 4 SELECT queries when UI invalidates and re-fetches stats, weekl
 | `user_progress.streak` legacy column | Always holds 0 or 1; real streak computed from sessions in `getUserStats` | Authoritative streak is in `/api/stats` |
 | No Stripe webhooks | Subscription renewal/cancellation not handled server-side | `isPremium` set at subscription creation only |
 | Server timezone for "today" | `getTodayCompletedGames` uses server's local midnight | Users in far-ahead timezones may see unexpected results |
-| `STRIPE_PRICE_ID` placeholder | Falls back to invalid `'price_premium_monthly'` string | Must set real price ID before launch |
+| `STRIPE_PRICE_ID` in test mode | Points at a real but test-mode Stripe price; missing-var case now fails loudly (500) instead of using an invalid placeholder | Create a live-mode price and update the env var before launch |
 | No test suite | No unit or integration tests; E2E only via Playwright | Manual test runs via testing skill |

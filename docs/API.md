@@ -281,7 +281,7 @@ The `clientSecret` is passed to Stripe Elements (`<PaymentElement>`) on the fron
 **Response `400`:** `{"message":"No user email on file"}` or Stripe error  
 **Response `404`:** `{"message":"User not found"}`
 
-> **Deployment note:** Set `STRIPE_PRICE_ID` env var to a real Stripe price ID. Without it the subscription creation will fail (placeholder value `'price_premium_monthly'` is not valid).
+> **Deployment note:** `STRIPE_PRICE_ID` must be set to a real Stripe price ID — the route now returns a `500` with a clear message instead of falling back to an invalid placeholder. A real **test-mode** price ("BrainBoost Premium", $9.99/mo) is currently configured, so the full upgrade flow can be exercised end-to-end with Stripe test cards. Before going live, create a matching **live-mode** price and update `STRIPE_PRICE_ID`.
 
 ---
 
