@@ -240,7 +240,7 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
-    return [...new Set(todaySessions.map(s => s.gameType))];
+    return Array.from(new Set(todaySessions.map(s => s.gameType)));
   }
 
   async getUserTrainingPlan(userId: string): Promise<TrainingPlan | undefined> {

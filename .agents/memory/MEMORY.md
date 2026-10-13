@@ -4,3 +4,4 @@
 - [Logic puzzle options](logic-puzzle-options.md) — buildOptions() uses iterative fallback to always produce exactly 3 choices; sequential progression pattern exhausted SHAPES pool without it
 - [Game pause vs idle state](game-pause-vs-idle.md) — don't reuse the "not started yet" boolean to represent pause; it collides with the start screen and wipes progress
 - [Stripe price ID fallback](stripe-price-fallback.md) — never fall back to a made-up literal price ID string; fail loudly and require a real STRIPE_PRICE_ID env var instead
+- [esbuild override compatibility](esbuild-override.md) — keep the Vite 6 / Drizzle Kit override on patched esbuild 0.25.x; 0.28.x fails this app's production transpile target
